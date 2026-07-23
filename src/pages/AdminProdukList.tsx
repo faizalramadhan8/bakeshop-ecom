@@ -1,7 +1,5 @@
-"use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, Package, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { adminApi, getAdminToken, type EcomAdminProduct } from "@/lib/api";
 
@@ -10,8 +8,8 @@ function formatRp(n: number | null | undefined): string {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
-export default function AdminProdukListPage() {
-  const router = useRouter();
+export function AdminProdukList() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<EcomAdminProduct[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -19,24 +17,33 @@ export default function AdminProdukListPage() {
 
   useEffect(() => {
     if (!getAdminToken()) {
-      router.replace("/admin/login");
+      navigate("/admin/login", { replace: true });
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setError(null);
     adminApi
       .listProducts({ search: search.trim() || undefined, limit: 100 })
-      .then((res) => { if (!cancelled) setProducts(res.items || []); })
-      .catch((err) => { if (!cancelled) setError(err?.message || "Gagal load"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [search, router]);
+      .then((res) => {
+        if (!cancelled) setProducts(res.items || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Gagal load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [search, navigate]);
 
   return (
     <main className="min-h-screen p-6">
       <div className="max-w-5xl mx-auto">
         <Link
-          href="/admin"
+          to="/admin"
           className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
         >
           <ArrowLeft size={16} />
@@ -49,7 +56,10 @@ export default function AdminProdukListPage() {
         </p>
 
         <div className="relative mb-6">
-          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500 pointer-events-none" />
+          <Search
+            size={18}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500 pointer-events-none"
+          />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -67,9 +77,6 @@ export default function AdminProdukListPage() {
           <div className="py-16 text-center">
             <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" />
             <p className="text-sm font-semibold text-cherry-600">{error}</p>
-            <p className="text-xs text-ink-500 mt-2">
-              Endpoint BE mungkin belum siap. Pastikan sudah rebuild backend.
-            </p>
           </div>
         ) : products.length === 0 ? (
           <div className="py-16 text-center text-ink-500">
@@ -79,12 +86,12 @@ export default function AdminProdukListPage() {
         ) : (
           <div className="bg-white rounded-2xl border border-cherry-200 overflow-hidden">
             {products.map((p, idx) => {
-              const publishable = p.ecom_is_available && p.stock_ecom > 0 && p.ecom_weight_grams;
               const needsSetup = p.ecom_is_available && (!p.stock_ecom || !p.ecom_weight_grams);
+              const tayang = p.ecom_is_available && p.stock_ecom > 0 && p.ecom_weight_grams;
               return (
                 <Link
                   key={p.id}
-                  href={`/admin/produk/${p.id}`}
+                  to={`/admin/produk/${p.id}`}
                   className={`flex items-center gap-4 px-5 py-4 hover:bg-cherry-50 transition-colors ${
                     idx > 0 ? "border-t border-cherry-100" : ""
                   }`}
@@ -102,7 +109,7 @@ export default function AdminProdukListPage() {
                           Perlu setup
                         </span>
                       )}
-                      {publishable && p.ecom_is_available && (
+                      {tayang && (
                         <span className="shrink-0 text-xs font-bold px-2 py-0.5 rounded bg-cherry-100 text-cherry-600">
                           Tayang
                         </span>

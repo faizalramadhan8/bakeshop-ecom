@@ -1,30 +1,23 @@
 # bakeshop-ecom
 
-Storefront + Admin Panel untuk Toko Bahan Kue Santi. Next.js 15 App Router.
+Storefront + Admin Panel untuk Toko Bahan Kue Santi. **Vite + React 19 SPA** (sama stack POS `bakeshop-fe`).
 
 ## Struktur
 
 ```
-src/app/
-├── page.tsx                    # placeholder homepage (Fase 1)
-├── layout.tsx                  # root layout + Toaster
-├── globals.css                 # Tailwind + palette pink Confectionery Warmth
-├── admin/                      # Ecom Admin panel (auth-gated)
-│   ├── login/page.tsx
-│   ├── page.tsx                # dashboard skeleton
-│   └── produk/
-│       ├── page.tsx            # list produk semua
-│       └── [id]/page.tsx       # edit ecom fields only
-├── kategori/                   # public storefront (Fase 2)
-├── produk/                     # public storefront (Fase 2)
-└── (Fase 3)
-    ├── (account)/              # customer login/register
-    └── (checkout)/             # multi-step checkout
-
 src/
-├── components/                 # shared UI components
+├── main.tsx                  # entry + BrowserRouter basename="/shop"
+├── App.tsx                   # router: /, /admin/login, /admin, /admin/produk[/:id]
+├── index.css                 # Tailwind v4 CSS-based + palette Confectionery Warmth
+├── pages/
+│   ├── Home.tsx              # placeholder homepage (Fase 1)
+│   ├── AdminLogin.tsx        # login form
+│   ├── AdminDashboard.tsx    # 4 stat cards (3 disabled)
+│   ├── AdminProdukList.tsx   # list produk + search + status badge
+│   └── AdminProdukEdit.tsx   # edit ecom fields (publish, stok, harga, berat, deskripsi)
+├── components/               # shared (empty di Fase 1)
 └── lib/
-    └── api.ts                  # BE API client (public/customer/admin scopes)
+    └── api.ts                # BE client, 3 scopes: public/customer/admin
 ```
 
 ## Setup
@@ -33,27 +26,38 @@ src/
 cd bakeshop-ecom
 cp .env.example .env
 npm install
-npm run dev   # http://localhost:3001
+npm run dev              # http://localhost:3001/shop/
 ```
 
-Butuh backend `bakeshop-be` up di `:7889` supaya API calls jalan. Next.js rewrite `/api/v1/*` → BE via `NEXT_PUBLIC_API_URL`.
+Butuh backend `bakeshop-be` up di `:7889`. Vite dev proxy forward `/api` ke backend.
+
+## Deploy (Docker Compose)
+
+Build multi-stage: Node build → Nginx serve static.
+
+```bash
+docker compose up -d --build ecom
+```
+
+Container serve dari `/usr/share/nginx/html/shop/*` at port 80. POS `bakeshop-fe` nginx proxy `/shop/*` → `ecom:80`.
+
+Direct debug port di localhost:
+```bash
+curl http://127.0.0.1:3334/shop/
+```
 
 ## Convention
 
-- **Palette**: sync sama bakeshop-fe POS (`cherry-*` scale = pink cherry, `ink-*` = warm ink text, `amber-500` = grosir/reseller badge accent). Lihat `globals.css`.
-- **Base font size**: 20px (Bu Santi prefer larger text) — konsisten sama POS.
-- **Token storage**: `bakeshop-ecom-admin-token` + `bakeshop-ecom-customer-token` di localStorage. Split scope cegah admin credentials bocor via customer session.
-- **Auth model** (lihat root CLAUDE.md + ECOM_ROADMAP.md):
-  - Ecom admin: role `ecom_admin`, `ecom_superadmin`, atau `superadmin`
-  - Ecom customer: extended dari `members` table
+- **Palette**: pink Confectionery Warmth via Tailwind v4 `@theme` block di `index.css`. Utility classes: `bg-cherry-500`, `text-ink-900`, `border-cherry-200`, dst.
+- **Base font**: 20px (Bu Santi prefer larger text) — konsisten POS.
+- **Token storage**: `bakeshop-ecom-admin-token` + `bakeshop-ecom-customer-token` di localStorage. Beda dari `bakeshop-token` (POS staff JWT).
+- **Auth model**:
+  - Admin ecom: role `ecom_admin`, `ecom_superadmin`, atau `superadmin`
+  - Customer ecom (Fase 3): extended dari `members` table + email + password + Brevo OTP
 
 ## Fase status
 
-- ✅ **Fase 1 — Foundation** (in progress)
-  - Skeleton structure up
-  - Admin login page + dashboard skeleton
-  - Admin product list + edit (ecom fields only)
-  - Butuh BE endpoint `/api/v1/ecom/admin/*` untuk fully functional (belum di-implement)
-- ⏳ Fase 2 — Storefront catalog
-- ⏳ Fase 3 — Auth + checkout + payment (Brevo email OTP + Midtrans + Biteship)
+- ✅ **Fase 1 Foundation** — skeleton + admin login + product management (ecom fields only)
+- ⏳ Fase 2 — Storefront catalog (homepage, kategori, product detail, cart)
+- ⏳ Fase 3 — Auth customer + checkout + payment (Brevo + Midtrans + Biteship)
 - ⏳ Fase 4 — Polish + launch

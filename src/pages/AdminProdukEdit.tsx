@@ -1,7 +1,5 @@
-"use client";
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, AlertCircle, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { adminApi, getAdminToken, type EcomAdminProduct } from "@/lib/api";
@@ -11,29 +9,32 @@ function formatRp(n: number | null | undefined): string {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
-export default function AdminEditProduk() {
-  const router = useRouter();
-  const params = useParams<{ id: string }>();
+export function AdminProdukEdit() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<EcomAdminProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Editable form state
   const [available, setAvailable] = useState(false);
-  const [stockEcom, setStockEcom] = useState<string>("");
-  const [ecomPrice, setEcomPrice] = useState<string>("");
-  const [ecomMemberPrice, setEcomMemberPrice] = useState<string>("");
-  const [weight, setWeight] = useState<string>("");
-  const [minOrder, setMinOrder] = useState<string>("1");
-  const [desc, setDesc] = useState<string>("");
+  const [stockEcom, setStockEcom] = useState("");
+  const [ecomPrice, setEcomPrice] = useState("");
+  const [ecomMemberPrice, setEcomMemberPrice] = useState("");
+  const [weight, setWeight] = useState("");
+  const [minOrder, setMinOrder] = useState("1");
+  const [desc, setDesc] = useState("");
 
   useEffect(() => {
-    if (!getAdminToken()) { router.replace("/admin/login"); return; }
+    if (!getAdminToken()) {
+      navigate("/admin/login", { replace: true });
+      return;
+    }
+    if (!id) return;
     let cancelled = false;
     setLoading(true);
     adminApi
-      .getProduct(params.id)
+      .getProduct(id)
       .then((p) => {
         if (cancelled) return;
         setProduct(p);
@@ -45,16 +46,22 @@ export default function AdminEditProduk() {
         setMinOrder(String(p.ecom_min_order));
         setDesc(p.ecom_description ?? "");
       })
-      .catch((err) => { if (!cancelled) setError(err?.message || "Gagal load"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [params.id, router]);
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Gagal load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, navigate]);
 
   const save = async () => {
     if (!product) return;
     setSaving(true);
     try {
-      const parseNumber = (s: string) => s.trim() === "" ? null : Number(s);
+      const parseNumber = (s: string) => (s.trim() === "" ? null : Number(s));
       const updated = await adminApi.updateEcomFields(product.id, {
         ecom_is_available: available,
         stock_ecom: Number(stockEcom) || 0,
@@ -66,8 +73,8 @@ export default function AdminEditProduk() {
       });
       setProduct(updated);
       toast.success("Perubahan disimpan");
-    } catch (err: any) {
-      toast.error(err?.message || "Gagal simpan");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal simpan");
     } finally {
       setSaving(false);
     }
@@ -81,8 +88,10 @@ export default function AdminEditProduk() {
       <main className="min-h-screen p-6">
         <div className="max-w-2xl mx-auto text-center py-16">
           <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" />
-          <p className="text-sm font-semibold text-cherry-600">{error || "Produk tidak ditemukan"}</p>
-          <Link href="/admin/produk" className="inline-block mt-4 text-sm text-cherry-500 underline">
+          <p className="text-sm font-semibold text-cherry-600">
+            {error || "Produk tidak ditemukan"}
+          </p>
+          <Link to="/admin/produk" className="inline-block mt-4 text-sm text-cherry-500 underline">
             Kembali ke daftar produk
           </Link>
         </div>
@@ -91,15 +100,20 @@ export default function AdminEditProduk() {
   }
 
   const warnings: string[] = [];
-  if (available && Number(stockEcom) === 0) warnings.push("Stok online 0 — produk tidak akan tampil di storefront");
-  if (available && !weight.trim()) warnings.push("Berat belum di-set — tidak bisa hitung ongkir");
-  if (Number(stockEcom) > product.stock_pos) warnings.push(`Stok online (${stockEcom}) lebih besar dari stok toko (${product.stock_pos})`);
+  if (available && Number(stockEcom) === 0)
+    warnings.push("Stok online 0 — produk tidak akan tampil di storefront");
+  if (available && !weight.trim())
+    warnings.push("Berat belum di-set — tidak bisa hitung ongkir");
+  if (Number(stockEcom) > product.stock_pos)
+    warnings.push(
+      `Stok online (${stockEcom}) lebih besar dari stok toko (${product.stock_pos})`
+    );
 
   return (
     <main className="min-h-screen p-6">
       <div className="max-w-2xl mx-auto">
         <Link
-          href="/admin/produk"
+          to="/admin/produk"
           className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
         >
           <ArrowLeft size={16} />
@@ -111,15 +125,18 @@ export default function AdminEditProduk() {
 
         {warnings.length > 0 && (
           <div className="bg-amber-50 border border-amber-500/30 rounded-2xl p-4 mb-6">
-            <p className="text-xs font-black uppercase tracking-wider text-amber-600 mb-2">Perlu diperhatikan</p>
+            <p className="text-xs font-black uppercase tracking-wider text-amber-600 mb-2">
+              Perlu diperhatikan
+            </p>
             <ul className="text-xs text-ink-700 space-y-1 list-disc list-inside">
-              {warnings.map((w) => <li key={w}>{w}</li>)}
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
             </ul>
           </div>
         )}
 
         <div className="flex flex-col gap-4">
-          {/* Publish toggle */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
             <h2 className="text-sm font-black text-ink-900 mb-3">Publish di storefront</h2>
             <label className="flex items-center gap-3 cursor-pointer">
@@ -139,7 +156,6 @@ export default function AdminEditProduk() {
             </p>
           </section>
 
-          {/* Stok */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
             <h2 className="text-sm font-black text-ink-900 mb-3">Stok Online</h2>
             <div className="flex flex-col gap-2">
@@ -151,13 +167,12 @@ export default function AdminEditProduk() {
                 className="px-4 py-3 rounded-xl border border-cherry-200 text-sm focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400"
               />
               <p className="text-xs text-ink-500">
-                Stok toko fisik saat ini: <b className="text-ink-900">{product.stock_pos}</b>
+                Stok toko fisik saat ini: <b className="text-ink-900">{product.stock_pos}</b>{" "}
                 (dikelola di POS, tidak di sini)
               </p>
             </div>
           </section>
 
-          {/* Harga */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
             <h2 className="text-sm font-black text-ink-900 mb-3">Harga Online</h2>
             <div className="flex flex-col gap-3">
@@ -188,7 +203,6 @@ export default function AdminEditProduk() {
             </div>
           </section>
 
-          {/* Shipping info */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
             <h2 className="text-sm font-black text-ink-900 mb-3">Info Pengiriman</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -220,7 +234,6 @@ export default function AdminEditProduk() {
             </div>
           </section>
 
-          {/* Deskripsi */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
             <h2 className="text-sm font-black text-ink-900 mb-3">Deskripsi Produk</h2>
             <textarea

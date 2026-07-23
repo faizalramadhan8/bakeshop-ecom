@@ -1,9 +1,7 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { ShoppingBag, LayoutDashboard } from "lucide-react";
 
-// Placeholder homepage — Fase 1 skeleton. Fase 2 akan bikin proper:
-// hero + 6 category grid + featured products + trust strip.
-export default function Home() {
+export function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-6">
       <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-cherry-300 to-cherry-500 shadow-lg flex items-center justify-center">
@@ -20,14 +18,14 @@ export default function Home() {
 
       <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full max-w-md">
         <Link
-          href="/kategori/tepung"
+          to="/"
           className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-white font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 transition-opacity"
         >
           <ShoppingBag size={18} />
           Lihat Katalog
         </Link>
         <Link
-          href="/admin/login"
+          to="/admin/login"
           className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold border-2 border-cherry-500 text-cherry-500 hover:bg-cherry-50 transition-colors"
         >
           <LayoutDashboard size={18} />
@@ -35,9 +33,7 @@ export default function Home() {
         </Link>
       </div>
 
-      <p className="text-xs text-ink-500 mt-8">
-        v0.1 · Fase 1 skeleton
-      </p>
+      <p className="text-xs text-ink-500 mt-8">v0.1 · Fase 1 skeleton</p>
     </main>
   );
 }

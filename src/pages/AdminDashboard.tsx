@@ -1,42 +1,38 @@
-"use client";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { Link, useNavigate } from "react-router-dom";
 import { Package, ShoppingCart, Users, TrendingUp, LogOut } from "lucide-react";
 import { getAdminToken, setAdminToken } from "@/lib/api";
 
-// Admin dashboard skeleton — Fase 1. Stat cards placeholder, real data
-// nyusul di Fase 2/3.
-export default function AdminDashboard() {
-  const router = useRouter();
+export function AdminDashboard() {
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!getAdminToken()) router.replace("/admin/login");
-  }, [router]);
+    if (!getAdminToken()) navigate("/admin/login", { replace: true });
+  }, [navigate]);
 
   const cards = [
     {
-      href: "/admin/produk",
+      to: "/admin/produk",
       icon: <Package size={20} />,
       title: "Produk Online",
       desc: "Manage stok, harga, deskripsi produk yang tampil di storefront",
     },
     {
-      href: "#",
+      to: "#",
       icon: <ShoppingCart size={20} />,
       title: "Pesanan Online",
       desc: "Terima + proses order dari customer",
       disabled: true,
     },
     {
-      href: "#",
+      to: "#",
       icon: <Users size={20} />,
       title: "Customer",
       desc: "Daftar customer registered + riwayat order",
       disabled: true,
     },
     {
-      href: "#",
+      to: "#",
       icon: <TrendingUp size={20} />,
       title: "Laporan",
       desc: "Revenue, conversion, top produk online",
@@ -55,7 +51,7 @@ export default function AdminDashboard() {
           <button
             onClick={() => {
               setAdminToken(null);
-              router.push("/admin/login");
+              navigate("/admin/login");
             }}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-cherry-200 text-ink-700 hover:bg-cherry-50 transition-colors"
           >
@@ -68,7 +64,8 @@ export default function AdminDashboard() {
           {cards.map((c) => (
             <Link
               key={c.title}
-              href={c.disabled ? "#" : c.href}
+              to={c.disabled ? "#" : c.to}
+              onClick={(e) => c.disabled && e.preventDefault()}
               className={`block bg-white rounded-2xl border p-5 transition-all ${
                 c.disabled
                   ? "border-cherry-100 opacity-50 cursor-not-allowed"
@@ -88,7 +85,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mt-8 bg-cherry-50 rounded-2xl border border-cherry-200 p-5">
-          <h3 className="text-sm font-black text-ink-900 mb-2">🚧 v0.1 · Fase 1 skeleton</h3>
+          <h3 className="text-sm font-black text-ink-900 mb-2">v0.1 · Fase 1 skeleton</h3>
           <p className="text-xs text-ink-700 leading-relaxed">
             Sekarang bisa manage produk online (allocate stok + set harga).
             Fitur order, customer, laporan menyusul di fase berikutnya.

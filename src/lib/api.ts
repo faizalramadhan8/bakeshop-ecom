@@ -1,28 +1,23 @@
 // API client — talk ke bakeshop-be Go backend.
-// PATH: basePath="/shop", tapi API fetch harus ABSOLUTE root ("/api/v1")
-// supaya langsung ke POS nginx yang forward ke backend (bypass ecom container).
-// Kalau pakai relative path, browser resolve jadi "/shop/api/v1" yang gak ada.
-// Token storage split: `bakeshop-ecom-admin-token` untuk admin, TBD customer.
+// Client-side fetch pakai ABSOLUTE root "/api/v1" — dilayani nginx POS
+// yang forward ke backend:7889. Skip Vite basePath supaya tidak resolve ke
+// "/shop/api/v1" (yang tidak ada).
 
 const API_PREFIX = "/api/v1";
 
-// ─── Token storage ───────────────────────────────────────────────────
 const ADMIN_TOKEN_KEY = "bakeshop-ecom-admin-token";
 const CUSTOMER_TOKEN_KEY = "bakeshop-ecom-customer-token";
 
 export function getAdminToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(ADMIN_TOKEN_KEY);
+  return typeof window === "undefined" ? null : localStorage.getItem(ADMIN_TOKEN_KEY);
 }
 export function setAdminToken(token: string | null) {
   if (typeof window === "undefined") return;
   if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
   else localStorage.removeItem(ADMIN_TOKEN_KEY);
 }
-
 export function getCustomerToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(CUSTOMER_TOKEN_KEY);
+  return typeof window === "undefined" ? null : localStorage.getItem(CUSTOMER_TOKEN_KEY);
 }
 export function setCustomerToken(token: string | null) {
   if (typeof window === "undefined") return;
@@ -30,7 +25,6 @@ export function setCustomerToken(token: string | null) {
   else localStorage.removeItem(CUSTOMER_TOKEN_KEY);
 }
 
-// ─── Base request ────────────────────────────────────────────────────
 type Scope = "admin" | "customer" | "public";
 
 async function request<T = unknown>(
@@ -58,11 +52,13 @@ async function request<T = unknown>(
   return (data?.body ?? data) as T;
 }
 
-// ─── Admin API ───────────────────────────────────────────────────────
 export const adminApi = {
   login: (email: string, password: string) =>
     request<{ access_token: string; user: { id: string; role: string; fullname: string } }>(
-      "POST", "/ecom/admin/auth/login", { email, password }, "public"
+      "POST",
+      "/ecom/admin/auth/login",
+      { email, password, device_fingerprint: "" },
+      "public"
     ),
 
   logout: () => {
@@ -70,7 +66,6 @@ export const adminApi = {
     return Promise.resolve();
   },
 
-  // Product management — endpoint akan dibikin di Fase 1 BE.
   listProducts: (params?: { search?: string; cursor?: string; limit?: number }) => {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
@@ -78,7 +73,10 @@ export const adminApi = {
     if (params?.limit) q.set("limit", String(params.limit));
     const qs = q.toString();
     return request<{ items: EcomAdminProduct[]; next_cursor: string }>(
-      "GET", `/ecom/admin/products${qs ? "?" + qs : ""}`, undefined, "admin"
+      "GET",
+      `/ecom/admin/products${qs ? "?" + qs : ""}`,
+      undefined,
+      "admin"
     );
   },
 
@@ -89,15 +87,15 @@ export const adminApi = {
     request<EcomAdminProduct>("PATCH", `/ecom/admin/products/${id}/ecom-fields`, data, "admin"),
 };
 
-// ─── Types ───────────────────────────────────────────────────────────
 export interface EcomAdminProduct {
   id: string;
   name: string;
+  name_id: string;
   sku: string;
-  // POS side (read-only di ecom admin)
   stock_pos: number;
   selling_price: number;
-  // Ecom side (editable)
+  member_price?: number | null;
+  image?: string;
   stock_ecom: number;
   ecom_price: number | null;
   ecom_member_price: number | null;
