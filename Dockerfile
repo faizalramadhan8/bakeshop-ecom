@@ -2,7 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci || npm install
+# Belum commit package-lock.json — pakai `npm install` (generate lock saat build).
+# Kalau nanti lock committed, ganti ke `npm ci` untuk deterministic build.
+RUN npm install
 COPY . .
 RUN npm run build
 
