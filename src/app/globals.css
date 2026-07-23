@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Confectionery Warmth palette — sync dengan bakeshop-fe POS.
+   Primary: pink cherry gradient (#FFB5C0 → #E11D48)
+   Secondary neutral: cream bg (#FFF4F6), warm ink (#2B1318), taupe (#6E4E57)
+   Signal red: #BE123C (untuk stok habis, error)
+   Accent amber untuk grosir/reseller badge: #F59E0B
+*/
+@theme {
+  --color-cherry-50:  #FFF4F6;
+  --color-cherry-100: #FFE4E9;
+  --color-cherry-200: #FFD1DB;
+  --color-cherry-300: #FFB5C0;
+  --color-cherry-400: #FB7185;
+  --color-cherry-500: #E11D48;
+  --color-cherry-600: #BE123C;
+  --color-cherry-700: #9F1239;
+  --color-cherry-900: #3A1F2A;
+
+  --color-ink-900: #2B1318;
+  --color-ink-700: #6E4E57;
+  --color-ink-500: #8B6A73;
+
+  --color-amber-500: #F59E0B;
+
+  --font-display: "Proxima Nova", "Proxima Nova Alt", "ProximaNova-Regular",
+                  "Mulish", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                  Roboto, Helvetica, Arial, system-ui, sans-serif;
+}
+
+html {
+  font-size: 20px;  /* Match bakeshop-fe base — Bu Santi prefer larger text */
+  font-family: var(--font-display);
+  color: var(--color-ink-900);
+  background: var(--color-cherry-50);
+}
+
+body {
+  font-feature-settings: "tnum", "lnum";  /* Tabular figures untuk price */
+  min-height: 100vh;
+}
+
+/* Hide number input spinner arrows globally (owner request in POS) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
