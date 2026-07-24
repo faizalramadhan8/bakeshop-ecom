@@ -18,6 +18,11 @@ export function Produk() {
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Hooks HARUS declare di top level — tidak boleh setelah early return
+  // (Rules of Hooks). Sebelumnya di declare setelah `if (loading) return` +
+  // `if (error) return` → crash silent saat product loaded karena jumlah hook
+  // berubah antar render.
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -74,7 +79,6 @@ export function Produk() {
   const effectivePrice = getBestTierPrice(product, qty);
   const savings = (product.price - effectivePrice) * qty;
 
-  const [adding, setAdding] = useState(false);
   const handleAdd = async () => {
     if (!product) return;
     setAdding(true);
