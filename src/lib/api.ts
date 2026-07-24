@@ -408,6 +408,7 @@ export interface CustomerOrderDetail {
   payment: {
     mode: "midtrans" | "manual";
     snap_token?: string;
+    snap_redirect_url?: string;
     reference?: string;
     paid_at?: string;
     expired_at?: string;

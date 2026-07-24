@@ -100,7 +100,7 @@ export function Checkout() {
   const totalWithShipping = cart.subtotal + (selectedRate?.cost || 0);
 
   return (
-    <div className="max-w-4xl mx-auto p-4 pb-32">
+    <div className="max-w-4xl mx-auto p-4 pb-48">
       <div className="flex items-center gap-2 mb-4">
         <Link to="/keranjang" className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-cherry-50">
           <ArrowLeft size={16} />
@@ -194,10 +194,11 @@ export function Checkout() {
         </div>
       </div>
 
-      {/* Sticky bottom actions */}
+      {/* Sticky bottom actions — sit above BottomNav (56px + safe-area).
+          Sebelumnya bottom-0 z-30 → ke-obscure BottomNav (z-40). */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-cherry-200 px-4 py-3"
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        className="fixed left-0 right-0 z-50 bg-white border-t border-cherry-200 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
+        style={{ bottom: "calc(56px + env(safe-area-inset-bottom))" }}
       >
         <div className="max-w-4xl mx-auto flex items-center gap-2">
           {step > 1 && (

@@ -130,14 +130,14 @@ export function PesananDetail() {
                   Bayar sebelum {formatDateFull(order.payment.expired_at)}
                 </p>
               )}
-              {order.payment.mode === "midtrans" && order.payment.snap_token && !order.payment.snap_token.startsWith("stub-") ? (
+              {order.payment.mode === "midtrans" && order.payment.snap_redirect_url ? (
                 <a
-                  href={`https://app${order.payment.snap_token.startsWith("prod") ? "" : ".sandbox"}.midtrans.com/snap/v2/vtweb/${order.payment.snap_token}`}
+                  href={order.payment.snap_redirect_url}
                   target="_blank"
                   rel="noopener"
                   className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
                 >
-                  <CreditCard size={14} />
+                  <CreditCard size={14} aria-hidden="true" />
                   Bayar Sekarang
                 </a>
               ) : (
