@@ -2,10 +2,13 @@ import { Link } from "react-router-dom";
 import { Search, ShoppingBag, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useCart } from "@/lib/cartStore";
 
 export function Header() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
+  const { cart } = useCart();
+  const cartCount = cart?.total_qty || 0;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,9 +47,14 @@ export function Header() {
           <Link
             to="/keranjang"
             aria-label="Keranjang"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 hover:text-cherry-500 transition-colors"
+            className="relative w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 hover:text-cherry-500 transition-colors"
           >
             <ShoppingBag size={18} />
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-gradient-to-br from-cherry-400 to-cherry-500 text-white text-xs font-black flex items-center justify-center leading-none">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Link>
           <Link
             to="/akun"

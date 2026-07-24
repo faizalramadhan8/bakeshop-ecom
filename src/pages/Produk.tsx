@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag } from "lucide-react";
 import toast from "react-hot-toast";
 import { publicApi, formatRp, type EcomProductDetail } from "@/lib/api";
+import { addToCart } from "@/lib/cartStore";
 
 function formatWeight(grams?: number): string {
   if (!grams) return "";
@@ -73,12 +74,19 @@ export function Produk() {
   const effectivePrice = getBestTierPrice(product, qty);
   const savings = (product.price - effectivePrice) * qty;
 
-  const addToCart = () => {
-    // Fase 3 will actually persist. Fase 2 placeholder toast.
-    toast.success(
-      `${qty} × ${product.name_id} ditambahkan (fitur cart segera hadir)`,
-      { duration: 3000 }
-    );
+  const [adding, setAdding] = useState(false);
+  const handleAdd = async () => {
+    if (!product) return;
+    setAdding(true);
+    try {
+      await addToCart(product.id, qty);
+      toast.success(`${qty} × ${product.name_id} ditambahkan ke keranjang`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal menambahkan ke keranjang";
+      toast.error(msg);
+    } finally {
+      setAdding(false);
+    }
   };
 
   const changeQty = (delta: number) => {
@@ -235,11 +243,12 @@ export function Produk() {
               )}
             </div>
             <button
-              onClick={addToCart}
-              className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 transition-opacity"
+              onClick={handleAdd}
+              disabled={adding}
+              className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 disabled:opacity-60 transition-opacity"
             >
               <ShoppingBag size={16} />
-              Tambah ke Keranjang · {formatRp(effectivePrice * qty)}
+              {adding ? "Menambah…" : `Tambah ke Keranjang · ${formatRp(effectivePrice * qty)}`}
             </button>
           </div>
         </div>
@@ -281,11 +290,12 @@ export function Produk() {
             </button>
           </div>
           <button
-            onClick={addToCart}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 active:scale-[0.98] transition-transform"
+            onClick={handleAdd}
+            disabled={adding}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-60 active:scale-[0.98] transition-transform"
           >
             <ShoppingBag size={16} />
-            {formatRp(effectivePrice * qty)}
+            {adding ? "…" : formatRp(effectivePrice * qty)}
           </button>
         </div>
       </div>

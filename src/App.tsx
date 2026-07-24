@@ -3,6 +3,9 @@ import { ShopLayout } from "@/components/ShopLayout";
 import { Home } from "@/pages/Home";
 import { Kategori } from "@/pages/Kategori";
 import { Produk } from "@/pages/Produk";
+import { Keranjang } from "@/pages/Keranjang";
+import { Akun } from "@/pages/Akun";
+import { Alamat } from "@/pages/Alamat";
 import { AdminLogin } from "@/pages/AdminLogin";
 import { AdminDashboard } from "@/pages/AdminDashboard";
 import { AdminProdukList } from "@/pages/AdminProdukList";
@@ -17,6 +20,9 @@ export default function App() {
         <Route path="/kategori" element={<Kategori />} />
         <Route path="/kategori/:slug" element={<Kategori />} />
         <Route path="/produk/:id" element={<Produk />} />
+        <Route path="/keranjang" element={<Keranjang />} />
+        <Route path="/akun" element={<Akun />} />
+        <Route path="/akun/alamat" element={<Alamat />} />
         <Route path="/cari" element={<Kategori />} />
       </Route>
 

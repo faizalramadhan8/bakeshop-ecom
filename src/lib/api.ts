@@ -188,3 +188,78 @@ export function formatRp(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
   return "Rp " + n.toLocaleString("id-ID");
 }
+
+// ─── Customer Cart API (Fase 3) ─────────────────────────────────────
+export interface CartItem {
+  id: string;
+  product_id: string;
+  name: string;
+  name_id: string;
+  sku: string;
+  image?: string;
+  quantity: number;
+  price: number;
+  member_price?: number;
+  stock: number;
+  min_order: number;
+  weight_grams?: number;
+  subtotal: number;
+  unavailable?: boolean;
+  unavailable_reason?: string;
+}
+
+export interface Cart {
+  items: CartItem[];
+  item_count: number;
+  total_qty: number;
+  subtotal: number;
+  total_weight_grams: number;
+  has_unavailable: boolean;
+}
+
+export const cartApi = {
+  get: () => request<Cart>("GET", "/ecom/cart", undefined, "customer"),
+  add: (productId: string, quantity: number) =>
+    request<Cart>("POST", "/ecom/cart/items", { product_id: productId, quantity }, "customer"),
+  update: (itemId: string, quantity: number) =>
+    request<Cart>("PATCH", `/ecom/cart/items/${itemId}`, { quantity }, "customer"),
+  remove: (itemId: string) =>
+    request<Cart>("DELETE", `/ecom/cart/items/${itemId}`, undefined, "customer"),
+};
+
+// ─── Address Book API (Fase 3b) ─────────────────────────────────────
+export interface Address {
+  id: string;
+  label: string;
+  recipient_name: string;
+  recipient_phone: string;
+  province: string;
+  city: string;
+  district: string;
+  subdistrict: string;
+  zipcode: string;
+  street_address: string;
+  notes?: string;
+  is_default: boolean;
+}
+
+export interface AddressPayload {
+  label: string;
+  recipient_name: string;
+  recipient_phone: string;
+  province: string;
+  city: string;
+  district: string;
+  subdistrict: string;
+  zipcode: string;
+  street_address: string;
+  notes?: string;
+  is_default: boolean;
+}
+
+export const addressApi = {
+  list: () => request<Address[]>("GET", "/ecom/addresses", undefined, "customer"),
+  create: (data: AddressPayload) => request<Address>("POST", "/ecom/addresses", data, "customer"),
+  update: (id: string, data: AddressPayload) => request<Address>("PUT", `/ecom/addresses/${id}`, data, "customer"),
+  remove: (id: string) => request<null>("DELETE", `/ecom/addresses/${id}`, undefined, "customer"),
+};
