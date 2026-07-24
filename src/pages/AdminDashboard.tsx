@@ -1,14 +1,19 @@
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Package, ShoppingCart, Users, TrendingUp, LogOut } from "lucide-react";
-import { getAdminToken, setAdminToken } from "@/lib/api";
+import { Link } from "react-router-dom";
+import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft } from "lucide-react";
+import { setToken, decodeToken } from "@/lib/api";
+
+const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
 export function AdminDashboard() {
-  const navigate = useNavigate();
-
   useEffect(() => {
-    if (!getAdminToken()) navigate("/admin/login", { replace: true });
-  }, [navigate]);
+    const claims = decodeToken();
+    if (!claims || !ECOM_ADMIN_ROLES.includes(claims.role || "")) {
+      window.location.href = "/";
+    }
+  }, []);
+  const claims = decodeToken();
+  const isSuperadmin = claims?.role === "superadmin";
 
   const cards = [
     {
@@ -48,16 +53,28 @@ export function AdminDashboard() {
             <h1 className="text-2xl font-black text-ink-900">Ecom Admin</h1>
             <p className="text-sm text-ink-700 mt-0.5">Toko Bahan Kue Santi</p>
           </div>
-          <button
-            onClick={() => {
-              setAdminToken(null);
-              navigate("/admin/login");
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-cherry-200 text-ink-700 hover:bg-cherry-50 transition-colors"
-          >
-            <LogOut size={14} />
-            Keluar
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Superadmin: quick-jump ke POS admin. Bu Santi 21 Jul 2026. */}
+            {isSuperadmin && (
+              <button
+                onClick={() => { window.location.href = "/"; }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-cherry-200 text-ink-700 hover:bg-cherry-50 transition-colors"
+              >
+                <ArrowLeft size={14} />
+                POS Admin
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setToken(null);
+                window.location.href = "/";
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-cherry-200 text-ink-700 hover:bg-cherry-50 transition-colors"
+            >
+              <LogOut size={14} />
+              Keluar
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

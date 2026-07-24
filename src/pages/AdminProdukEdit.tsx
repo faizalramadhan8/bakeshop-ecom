@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Save, AlertCircle, Info } from "lucide-react";
 import toast from "react-hot-toast";
-import { adminApi, getAdminToken, type EcomAdminProduct } from "@/lib/api";
+import { adminApi, decodeToken, type EcomAdminProduct } from "@/lib/api";
+
+const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
 function formatRp(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
@@ -10,7 +12,6 @@ function formatRp(n: number | null | undefined): string {
 }
 
 export function AdminProdukEdit() {
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<EcomAdminProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,8 +27,9 @@ export function AdminProdukEdit() {
   const [desc, setDesc] = useState("");
 
   useEffect(() => {
-    if (!getAdminToken()) {
-      navigate("/admin/login", { replace: true });
+    const claims = decodeToken();
+    if (!claims || !ECOM_ADMIN_ROLES.includes(claims.role || "")) {
+      window.location.href = "/";
       return;
     }
     if (!id) return;
@@ -55,7 +57,7 @@ export function AdminProdukEdit() {
     return () => {
       cancelled = true;
     };
-  }, [id, navigate]);
+  }, [id]);
 
   const save = async () => {
     if (!product) return;

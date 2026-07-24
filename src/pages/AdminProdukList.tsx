@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowLeft, Search, Package, Eye, EyeOff, AlertCircle } from "lucide-react";
-import { adminApi, getAdminToken, type EcomAdminProduct } from "@/lib/api";
+import { adminApi, decodeToken, type EcomAdminProduct } from "@/lib/api";
+
+const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
 function formatRp(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
@@ -9,15 +11,15 @@ function formatRp(n: number | null | undefined): string {
 }
 
 export function AdminProdukList() {
-  const navigate = useNavigate();
   const [products, setProducts] = useState<EcomAdminProduct[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getAdminToken()) {
-      navigate("/admin/login", { replace: true });
+    const claims = decodeToken();
+    if (!claims || !ECOM_ADMIN_ROLES.includes(claims.role || "")) {
+      window.location.href = "/";
       return;
     }
     let cancelled = false;
@@ -37,7 +39,7 @@ export function AdminProdukList() {
     return () => {
       cancelled = true;
     };
-  }, [search, navigate]);
+  }, [search]);
 
   return (
     <main className="min-h-screen p-6">

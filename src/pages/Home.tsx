@@ -1,39 +1,178 @@
 import { Link } from "react-router-dom";
-import { ShoppingBag, LayoutDashboard } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Truck, ShieldCheck, Package as PackageIcon, ArrowRight } from "lucide-react";
+import { publicApi, type EcomCategory, type EcomProductListItem } from "@/lib/api";
+import { ProductCard } from "@/components/ProductCard";
+
+const CATEGORY_ICONS: Record<string, string> = {
+  // Fallback emoji per category name keyword — dipetakan lokal supaya
+  // customer lihat visual meskipun admin belum set icon di DB.
+  tepung: "🌾",
+  cokelat: "🍫",
+  butter: "🧈",
+  margarin: "🧈",
+  cream: "🥛",
+  susu: "🥛",
+  gula: "🍬",
+  perisa: "🌸",
+  kemasan: "📦",
+};
+
+function getCategoryEmoji(nameId: string): string {
+  const lower = nameId.toLowerCase();
+  for (const key in CATEGORY_ICONS) {
+    if (lower.includes(key)) return CATEGORY_ICONS[key];
+  }
+  return "🧁";
+}
 
 export function Home() {
+  const [categories, setCategories] = useState<EcomCategory[]>([]);
+  const [featured, setFeatured] = useState<EcomProductListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      publicApi.listCategories(),
+      publicApi.listProducts({ limit: 8 }),
+    ])
+      .then(([cats, prods]) => {
+        if (cancelled) return;
+        setCategories(cats || []);
+        setFeatured(prods?.items || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-6">
-      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-cherry-300 to-cherry-500 shadow-lg flex items-center justify-center">
-        <span className="text-white font-black text-3xl">S</span>
-      </div>
-      <div className="text-center max-w-md">
-        <h1 className="text-3xl font-black tracking-tight text-ink-900 mb-2">
-          Toko Bahan Kue Santi
-        </h1>
-        <p className="text-base text-ink-700">
-          Storefront online sedang disiapkan. Kunjungi kami segera.
-        </p>
-      </div>
+    <div className="flex flex-col">
+      {/* Hero — 1 promo banner (bukan carousel per research) */}
+      <section className="bg-gradient-to-br from-cherry-100 via-cherry-50 to-cherry-100 border-b border-cherry-100">
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-10 flex items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-cherry-500 mb-1">
+              Promo Bulan Ini
+            </p>
+            <h1 className="text-xl sm:text-3xl font-black tracking-tight text-ink-900 leading-tight mb-2">
+              Bahan Kue Lengkap
+              <br />
+              Kirim Seluruh Indonesia
+            </h1>
+            <p className="text-sm text-ink-700 mb-4">
+              Belanja mudah, harga grosir, stok fresh.
+            </p>
+            <Link
+              to="/kategori"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 transition-opacity"
+            >
+              Mulai Belanja
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+          <div className="hidden sm:block w-40 h-40 rounded-3xl bg-gradient-to-br from-cherry-300 to-cherry-500 shrink-0 flex items-center justify-center shadow-xl">
+            <span className="text-white font-black text-6xl">S</span>
+          </div>
+        </div>
+      </section>
 
-      <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full max-w-md">
-        <Link
-          to="/"
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-white font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 transition-opacity"
-        >
-          <ShoppingBag size={18} />
-          Lihat Katalog
-        </Link>
-        <Link
-          to="/admin/login"
-          className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-bold border-2 border-cherry-500 text-cherry-500 hover:bg-cherry-50 transition-colors"
-        >
-          <LayoutDashboard size={18} />
-          Admin
-        </Link>
-      </div>
+      {/* Trust strip */}
+      <section className="border-b border-cherry-100 bg-white">
+        <div className="max-w-6xl mx-auto px-4 py-3 grid grid-cols-3 gap-2 text-center">
+          {[
+            { icon: Truck, label: "Kirim ke seluruh Indonesia" },
+            { icon: ShieldCheck, label: "Pembayaran aman" },
+            { icon: PackageIcon, label: "Stok fresh & terpercaya" },
+          ].map((t) => (
+            <div key={t.label} className="flex items-center gap-2 justify-center">
+              <t.icon size={16} className="text-cherry-500 shrink-0" />
+              <p className="text-xs text-ink-700 font-semibold text-left">{t.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <p className="text-xs text-ink-500 mt-8">v0.1 · Fase 1 skeleton</p>
-    </main>
+      {/* Category grid */}
+      <section className="py-6">
+        <div className="max-w-6xl mx-auto px-4">
+          <h2 className="text-base font-black text-ink-900 mb-3">Kategori</h2>
+          {loading ? (
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="aspect-square bg-cherry-50 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="py-8 text-center text-ink-500">
+              <p className="text-sm">Belum ada kategori tersedia</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+              {categories.slice(0, 12).map((c) => (
+                <Link
+                  key={c.id}
+                  to={`/kategori/${c.id}`}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white border border-cherry-100 hover:border-cherry-300 hover:shadow-sm transition-all"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-cherry-50 flex items-center justify-center text-2xl">
+                    {getCategoryEmoji(c.name_id)}
+                  </div>
+                  <p className="text-xs font-bold text-ink-900 text-center leading-tight line-clamp-2">
+                    {c.name_id || c.name}
+                  </p>
+                  <p className="text-xs text-ink-500">{c.product_count} produk</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Featured products */}
+      <section className="py-6 border-t border-cherry-100">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-black text-ink-900">Produk Terbaru</h2>
+            <Link
+              to="/kategori"
+              className="text-sm font-bold text-cherry-500 hover:text-cherry-600 inline-flex items-center gap-1"
+            >
+              Lihat semua
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="aspect-[3/4] bg-cherry-50 rounded-2xl animate-pulse"
+                />
+              ))}
+            </div>
+          ) : featured.length === 0 ? (
+            <div className="py-8 text-center text-ink-500">
+              <PackageIcon size={40} className="mx-auto opacity-30 mb-2" />
+              <p className="text-sm">Belum ada produk yang tayang online</p>
+              <p className="text-xs mt-1">
+                Admin bisa publish produk via Admin Panel
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {featured.map((p) => (
+                <ProductCard key={p.id} p={p} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
