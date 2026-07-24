@@ -104,7 +104,9 @@ export function Produk() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 pb-32 sm:pb-4">
+    // pb-44 mobile = clearance untuk sticky action bar (72px) + BottomNav (76px)
+    // + safe-area. Cegah content ter-obscure saat scroll ke bawah.
+    <div className="max-w-4xl mx-auto p-4 pb-44 sm:pb-4">
       <button
         onClick={() => navigate(-1)}
         className="inline-flex items-center gap-1 text-sm text-ink-700 hover:text-ink-900 mb-4"
@@ -270,10 +272,13 @@ export function Produk() {
         </section>
       )}
 
-      {/* Sticky bottom bar (mobile) */}
+      {/* Sticky action bar (mobile) — sits ABOVE BottomNav. BottomNav = fixed
+          bottom-0 z-40 tinggi 56px+safe-area; action bar tumpuk di atasnya
+          via bottom-14 (56px) + z-50. Tanpa offset ini, action bar
+          ke-obscure oleh BottomNav → user tidak lihat tombol beli. */}
       <div
-        className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-cherry-200 px-4 py-3"
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        className="sm:hidden fixed left-0 right-0 z-50 bg-white border-t border-cherry-200 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
+        style={{ bottom: "calc(56px + env(safe-area-inset-bottom))" }}
       >
         <div className="flex items-center gap-3">
           <div className="inline-flex items-center border border-cherry-200 rounded-xl shrink-0">
