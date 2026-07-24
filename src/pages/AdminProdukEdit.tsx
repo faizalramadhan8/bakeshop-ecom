@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Save, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, Save, AlertCircle, Info, Upload, Camera, Image as ImageIcon, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { adminApi, decodeToken, type EcomAdminProduct } from "@/lib/api";
+import { adminApi, decodeToken, type EcomAdminProduct, type EcomCategoryAdmin } from "@/lib/api";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -25,6 +25,12 @@ export function AdminProdukEdit() {
   const [weight, setWeight] = useState("");
   const [minOrder, setMinOrder] = useState("1");
   const [desc, setDesc] = useState("");
+  const [ecomImage, setEcomImage] = useState<string | null>(null);
+  const [ecomCategoryId, setEcomCategoryId] = useState<string>("");
+  const [categories, setCategories] = useState<EcomCategoryAdmin[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const claims = decodeToken();
@@ -33,6 +39,8 @@ export function AdminProdukEdit() {
       return;
     }
     if (!id) return;
+    // Fetch category list paralel (best-effort — kalau fail, dropdown empty).
+    adminApi.listCategories().then((c) => setCategories(c || [])).catch(() => {});
     let cancelled = false;
     setLoading(true);
     adminApi
@@ -47,6 +55,8 @@ export function AdminProdukEdit() {
         setWeight(p.ecom_weight_grams !== null ? String(p.ecom_weight_grams) : "");
         setMinOrder(String(p.ecom_min_order));
         setDesc(p.ecom_description ?? "");
+        setEcomImage(p.ecom_image ?? null);
+        setEcomCategoryId(p.ecom_category_id ?? "");
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Gagal load");
@@ -72,6 +82,8 @@ export function AdminProdukEdit() {
         ecom_weight_grams: parseNumber(weight),
         ecom_min_order: Number(minOrder) || 1,
         ecom_description: desc.trim() || null,
+        ecom_image: ecomImage,
+        ecom_category_id: ecomCategoryId || null,
       });
       setProduct(updated);
       toast.success("Perubahan disimpan");
@@ -79,6 +91,27 @@ export function AdminProdukEdit() {
       toast.error(err instanceof Error ? err.message : "Gagal simpan");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset input value supaya re-select file yang sama trigger onChange lagi.
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran gambar maksimal 5 MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const res = await adminApi.uploadImage(file);
+      setEcomImage(res.url);
+      toast.success("Gambar berhasil diupload. Jangan lupa Simpan Perubahan.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal upload");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -156,6 +189,116 @@ export function AdminProdukEdit() {
               <Info size={12} className="mt-0.5 shrink-0" />
               Produk baru tampil di storefront kalau: publish ON + stok online &gt; 0 + berat sudah di-set
             </p>
+          </section>
+
+          <section className="bg-white rounded-2xl border border-cherry-200 p-5">
+            <h2 className="text-sm font-black text-ink-900 mb-3">Kategori Storefront</h2>
+            {categories.length === 0 ? (
+              <div className="text-xs text-ink-500">
+                Belum ada kategori ecom.{" "}
+                <Link to="/admin/kategori" className="text-cherry-500 font-bold underline">
+                  Tambah kategori dulu →
+                </Link>
+              </div>
+            ) : (
+              <>
+                <select
+                  value={ecomCategoryId}
+                  onChange={(e) => setEcomCategoryId(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-cherry-200 text-sm focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400 bg-white"
+                >
+                  <option value="">— Tanpa kategori ecom —</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name_id || c.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-ink-500 mt-2">
+                  Terpisah dari kategori POS. Kelola daftar di{" "}
+                  <Link to="/admin/kategori" className="text-cherry-500 font-bold underline">
+                    Kategori Ecommerce
+                  </Link>
+                  .
+                </p>
+              </>
+            )}
+          </section>
+
+          <section className="bg-white rounded-2xl border border-cherry-200 p-5">
+            <h2 className="text-sm font-black text-ink-900 mb-3">Foto Produk Online</h2>
+            <p className="text-xs text-ink-500 mb-3">
+              Foto khusus storefront. Kalau kosong, pakai foto default dari POS.
+            </p>
+
+            {ecomImage ? (
+              <div className="relative w-full aspect-square max-w-xs rounded-2xl overflow-hidden bg-cherry-50 border border-cherry-200 mb-3">
+                <img
+                  src={ecomImage}
+                  alt="Foto produk ecom"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEcomImage(null)}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                  aria-label="Hapus foto"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : product.image ? (
+              <div className="relative w-full aspect-square max-w-xs rounded-2xl overflow-hidden bg-cherry-50 border border-cherry-200 mb-3">
+                <img src={product.image} alt="Foto POS" className="w-full h-full object-cover" />
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs py-1 px-2 text-center">
+                  Foto dari POS (fallback)
+                </div>
+              </div>
+            ) : (
+              <div className="w-full aspect-square max-w-xs rounded-2xl bg-cherry-50 border-2 border-dashed border-cherry-200 flex flex-col items-center justify-center text-ink-500 mb-3">
+                <ImageIcon size={32} className="opacity-40" />
+                <p className="text-xs mt-2">Belum ada foto</p>
+              </div>
+            )}
+
+            {/* Hidden file inputs — trigger via visible buttons below */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-cherry-300 text-cherry-500 text-sm font-bold hover:bg-cherry-50 disabled:opacity-60"
+              >
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                Foto Langsung
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-cherry-300 text-cherry-500 text-sm font-bold hover:bg-cherry-50 disabled:opacity-60"
+              >
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                Pilih dari Galeri
+              </button>
+            </div>
+            <p className="text-xs text-ink-500 mt-2">Max 5 MB. Format: JPG, PNG, WebP.</p>
           </section>
 
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">

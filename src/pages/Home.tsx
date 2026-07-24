@@ -3,28 +3,8 @@ import { useEffect, useState } from "react";
 import { Truck, ShieldCheck, Package as PackageIcon, ArrowRight } from "lucide-react";
 import { publicApi, type EcomCategory, type EcomProductListItem } from "@/lib/api";
 import { ProductCard } from "@/components/ProductCard";
-
-const CATEGORY_ICONS: Record<string, string> = {
-  // Fallback emoji per category name keyword — dipetakan lokal supaya
-  // customer lihat visual meskipun admin belum set icon di DB.
-  tepung: "🌾",
-  cokelat: "🍫",
-  butter: "🧈",
-  margarin: "🧈",
-  cream: "🥛",
-  susu: "🥛",
-  gula: "🍬",
-  perisa: "🌸",
-  kemasan: "📦",
-};
-
-function getCategoryEmoji(nameId: string): string {
-  const lower = nameId.toLowerCase();
-  for (const key in CATEGORY_ICONS) {
-    if (lower.includes(key)) return CATEGORY_ICONS[key];
-  }
-  return "🧁";
-}
+import { BakeryLogo } from "@/components/BakeryLogo";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 export function Home() {
   const [categories, setCategories] = useState<EcomCategory[]>([]);
@@ -73,11 +53,11 @@ export function Home() {
               className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 transition-opacity"
             >
               Mulai Belanja
-              <ArrowRight size={16} />
+              <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </div>
-          <div className="hidden sm:block w-40 h-40 rounded-3xl bg-gradient-to-br from-cherry-300 to-cherry-500 shrink-0 flex items-center justify-center shadow-xl">
-            <span className="text-white font-black text-6xl">S</span>
+          <div className="hidden sm:flex shrink-0 shadow-xl rounded-3xl overflow-hidden">
+            <BakeryLogo size={140} />
           </div>
         </div>
       </section>
@@ -91,7 +71,7 @@ export function Home() {
             { icon: PackageIcon, label: "Stok fresh & terpercaya" },
           ].map((t) => (
             <div key={t.label} className="flex items-center gap-2 justify-center">
-              <t.icon size={16} className="text-cherry-500 shrink-0" />
+              <t.icon size={16} className="text-cherry-500 shrink-0" aria-hidden="true" />
               <p className="text-xs text-ink-700 font-semibold text-left">{t.label}</p>
             </div>
           ))}
@@ -120,8 +100,8 @@ export function Home() {
                   to={`/kategori/${c.id}`}
                   className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white border border-cherry-100 hover:border-cherry-300 hover:shadow-sm transition-all"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-cherry-50 flex items-center justify-center text-2xl">
-                    {getCategoryEmoji(c.name_id)}
+                  <div className="w-12 h-12 rounded-xl bg-cherry-50 flex items-center justify-center text-cherry-500">
+                    <CategoryIcon nameId={c.name_id || c.name} iconName={c.icon_name} size={22} />
                   </div>
                   <p className="text-xs font-bold text-ink-900 text-center leading-tight line-clamp-2">
                     {c.name_id || c.name}
@@ -144,7 +124,7 @@ export function Home() {
               className="text-sm font-bold text-cherry-500 hover:text-cherry-600 inline-flex items-center gap-1"
             >
               Lihat semua
-              <ArrowRight size={14} />
+              <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
           {loading ? (
@@ -158,7 +138,7 @@ export function Home() {
             </div>
           ) : featured.length === 0 ? (
             <div className="py-8 text-center text-ink-500">
-              <PackageIcon size={40} className="mx-auto opacity-30 mb-2" />
+              <PackageIcon size={40} className="mx-auto opacity-30 mb-2" aria-hidden="true" />
               <p className="text-sm">Belum ada produk yang tayang online</p>
               <p className="text-xs mt-1">
                 Admin bisa publish produk via Admin Panel

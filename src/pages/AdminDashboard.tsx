@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft } from "lucide-react";
+import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft, Tag } from "lucide-react";
 import { setToken, decodeToken } from "@/lib/api";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -21,6 +21,12 @@ export function AdminDashboard() {
       icon: <Package size={20} />,
       title: "Produk Online",
       desc: "Manage stok, harga, deskripsi produk yang tampil di storefront",
+    },
+    {
+      to: "/admin/kategori",
+      icon: <Tag size={20} />,
+      title: "Kategori Online",
+      desc: "Kelompok produk khusus storefront (terpisah dari kategori POS)",
     },
     {
       to: "#",

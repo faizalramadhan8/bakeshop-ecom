@@ -3,6 +3,7 @@ import { Search, ShoppingBag, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/lib/cartStore";
+import { BakeryLogo } from "./BakeryLogo";
 
 export function Header() {
   const navigate = useNavigate();
@@ -20,12 +21,9 @@ export function Header() {
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
         {/* Logo */}
         <Link to="/" className="shrink-0 flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cherry-300 to-cherry-500 flex items-center justify-center">
-            <span className="text-white font-black text-sm">S</span>
+          <div className="rounded-xl overflow-hidden shrink-0">
+            <BakeryLogo size={36} />
           </div>
-          <span className="hidden sm:block font-black text-sm text-ink-900 tracking-tight">
-            Santi
-          </span>
         </Link>
 
         {/* Search */}

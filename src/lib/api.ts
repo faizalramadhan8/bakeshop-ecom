@@ -97,6 +97,34 @@ export const adminApi = {
 
   updateEcomFields: (id: string, data: EcomFieldsPayload) =>
     request<EcomAdminProduct>("PATCH", `/ecom/admin/products/${id}/ecom-fields`, data, "admin"),
+
+  // Ecom categories CRUD (terpisah dari POS categories).
+  listCategories: () =>
+    request<EcomCategoryAdmin[]>("GET", "/ecom/admin/categories", undefined, "admin"),
+  createCategory: (data: EcomCategoryPayload) =>
+    request<EcomCategoryAdmin>("POST", "/ecom/admin/categories", data, "admin"),
+  updateCategory: (id: string, data: EcomCategoryPayload) =>
+    request<EcomCategoryAdmin>("PUT", `/ecom/admin/categories/${id}`, data, "admin"),
+  deleteCategory: (id: string) =>
+    request<null>("DELETE", `/ecom/admin/categories/${id}`, undefined, "admin"),
+
+  // Upload gambar produk ecom. Multipart form-data (bypass generic request()
+  // yang JSON-only). Endpoint /upload berlaku umum, dipakai POS + ecom.
+  uploadImage: async (file: File): Promise<{ url: string; filename: string }> => {
+    const tk = getToken();
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${API_PREFIX}/upload?type=products`, {
+      method: "POST",
+      headers: tk ? { Authorization: `Bearer ${tk}` } : {},
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.message || "Gagal upload gambar");
+    }
+    return data?.body ?? data;
+  },
 };
 
 export interface EcomAdminProduct {
@@ -113,6 +141,9 @@ export interface EcomAdminProduct {
   ecom_member_price: number | null;
   ecom_is_available: boolean;
   ecom_description: string | null;
+  ecom_image: string | null;
+  ecom_category_id: string | null;
+  ecom_category_name?: string;
   ecom_weight_grams: number | null;
   ecom_min_order: number;
 }
@@ -123,8 +154,28 @@ export interface EcomFieldsPayload {
   ecom_member_price?: number | null;
   ecom_is_available?: boolean;
   ecom_description?: string | null;
+  ecom_image?: string | null;
+  ecom_category_id?: string | null;
   ecom_weight_grams?: number | null;
   ecom_min_order?: number;
+}
+
+export interface EcomCategoryAdmin {
+  id: string;
+  name: string;
+  name_id?: string;
+  icon_name?: string;
+  sort_order: number;
+  is_active: boolean;
+  product_count: number;
+}
+
+export interface EcomCategoryPayload {
+  name: string;
+  name_id?: string;
+  icon_name?: string;
+  sort_order?: number;
+  is_active?: boolean;
 }
 
 // ─── Public storefront API (Fase 2) ─────────────────────────────────
@@ -132,8 +183,9 @@ export interface EcomCategory {
   id: string;
   name: string;
   name_id: string;
-  icon?: string;
-  color?: string;
+  icon_name?: string;
+  sort_order?: number;
+  is_active?: boolean;
   product_count: number;
 }
 
@@ -262,4 +314,107 @@ export const addressApi = {
   create: (data: AddressPayload) => request<Address>("POST", "/ecom/addresses", data, "customer"),
   update: (id: string, data: AddressPayload) => request<Address>("PUT", `/ecom/addresses/${id}`, data, "customer"),
   remove: (id: string) => request<null>("DELETE", `/ecom/addresses/${id}`, undefined, "customer"),
+};
+
+// ─── Checkout API (Fase 3c-3d) ──────────────────────────────────────
+export interface ShippingRate {
+  courier: string;
+  courier_name: string;
+  service: string;
+  service_name: string;
+  cost: number;
+  etd: string;
+}
+
+export interface ShippingRatesResponse {
+  address: {
+    label: string;
+    recipient_name: string;
+    city: string;
+    province: string;
+  };
+  total_weight_grams: number;
+  rates: ShippingRate[];
+}
+
+export interface CheckoutResponse {
+  order_id: string;
+  subtotal: number;
+  shipping_cost: number;
+  total: number;
+  snap_token?: string;
+  snap_redirect_url?: string;
+  payment_mode: "midtrans" | "manual";
+  ecom_status: string;
+}
+
+export const checkoutApi = {
+  getShippingRates: (addressId: string) =>
+    request<ShippingRatesResponse>("POST", "/ecom/shipping/rates", { address_id: addressId }, "customer"),
+  createOrder: (data: {
+    address_id: string;
+    shipping_courier: string;
+    shipping_service: string;
+    shipping_cost: number;
+    shipping_etd: string;
+    notes?: string;
+  }) => request<CheckoutResponse>("POST", "/ecom/checkout/create-order", data, "customer"),
+};
+
+// ─── Customer Orders API (Fase 3e) ──────────────────────────────────
+export interface CustomerOrderListItem {
+  id: string;
+  total: number;
+  ecom_status: string;
+  item_count: number;
+  first_item: string;
+  created_at: string;
+  payment_paid_at?: string;
+}
+
+export interface CustomerOrderDetail {
+  id: string;
+  subtotal: number;
+  shipping_cost: number;
+  total: number;
+  ecom_status: string;
+  created_at: string;
+  items: {
+    product_id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    subtotal: number;
+    image?: string;
+  }[];
+  shipping: {
+    courier: string;
+    service_name: string;
+    etd: string;
+    awb?: string;
+    address: {
+      label: string;
+      recipient_name: string;
+      recipient_phone: string;
+      street_address: string;
+      subdistrict: string;
+      district: string;
+      city: string;
+      province: string;
+      zipcode: string;
+      notes?: string;
+    };
+  };
+  payment: {
+    mode: "midtrans" | "manual";
+    snap_token?: string;
+    reference?: string;
+    paid_at?: string;
+    expired_at?: string;
+  };
+}
+
+export const ordersApi = {
+  list: () => request<CustomerOrderListItem[]>("GET", "/ecom/orders", undefined, "customer"),
+  getDetail: (id: string) => request<CustomerOrderDetail>("GET", `/ecom/orders/${id}`, undefined, "customer"),
 };

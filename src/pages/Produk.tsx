@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag } from "lucide-react";
+import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag, Check } from "lucide-react";
 import toast from "react-hot-toast";
 import { publicApi, formatRp, type EcomProductDetail } from "@/lib/api";
 import { addToCart } from "@/lib/cartStore";
@@ -179,7 +179,9 @@ export function Produk() {
                     Beli ≥ <b>{t.min_qty}</b>{" "}
                     <span className="text-ink-500">→ {formatRp(t.price)}/pcs</span>
                     {qty >= t.min_qty && (
-                      <span className="ml-2 text-xs font-bold text-cherry-500">✓ aktif</span>
+                      <span className="ml-2 inline-flex items-center gap-1 text-xs font-bold text-cherry-500">
+                        <Check size={12} aria-hidden="true" /> aktif
+                      </span>
                     )}
                   </p>
                 ))}

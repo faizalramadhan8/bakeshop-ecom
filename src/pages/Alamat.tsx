@@ -1,8 +1,37 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Plus, MapPin, Trash2, Edit3, Check, X } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, Trash2, Edit3, Check, X, Loader2, Navigation } from "lucide-react";
 import toast from "react-hot-toast";
 import { addressApi, type Address, type AddressPayload } from "@/lib/api";
+
+// Reverse-geocode lat/lng → address fields via Nominatim (OpenStreetMap, gratis).
+// Rate limit 1 request/detik — cukup untuk single-user click. Kalau nanti butuh
+// scale, ganti ke Google Geocoding API atau host Nominatim sendiri.
+async function reverseGeocode(lat: number, lng: number): Promise<Partial<AddressPayload>> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=id`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "TBK-Santi-Ecom/1.0 (tbksanti.id)" },
+  });
+  if (!res.ok) throw new Error("Gagal cari alamat");
+  const data = await res.json();
+  const a = data.address || {};
+  // OSM address parts (varies per country/region). Untuk Indonesia:
+  //   state → Provinsi
+  //   city / town / regency → Kota/Kabupaten
+  //   suburb / city_district / district → Kecamatan
+  //   village / neighbourhood → Kelurahan/Desa
+  //   road + house_number → Alamat jalan
+  //   postcode → Kode pos
+  const road = [a.road, a.house_number].filter(Boolean).join(" No. ");
+  return {
+    province: a.state || "",
+    city: a.city || a.town || a.county || a.regency || "",
+    district: a.suburb || a.city_district || a.district || "",
+    subdistrict: a.village || a.hamlet || a.neighbourhood || a.quarter || "",
+    zipcode: a.postcode || "",
+    street_address: road || data.display_name?.split(",").slice(0, 2).join(", ") || "",
+  };
+}
 
 const EMPTY: AddressPayload = {
   label: "Rumah",
@@ -25,6 +54,45 @@ export function Alamat() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AddressPayload>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  // Geolocation → reverse-geocode → autofill province/city/district/subdistrict/zip/street.
+  // Manual fields tetap editable — user boleh koreksi hasil auto-fill.
+  const useCurrentLocation = () => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Browser tidak support geolocation");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const parts = await reverseGeocode(latitude, longitude);
+          setForm((prev) => ({
+            ...prev,
+            ...parts,
+            // Simpan lat/lng juga (walaupun tidak dipakai display, useful untuk
+            // future map picker / Biteship instant courier accuracy).
+          }));
+          toast.success("Alamat dari lokasi berhasil di-isi");
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Gagal cari alamat");
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        const msg =
+          err.code === 1 ? "Izin lokasi ditolak. Aktifkan di setting browser."
+          : err.code === 2 ? "Lokasi tidak bisa diambil (GPS off?)"
+          : "Timeout. Coba lagi.";
+        toast.error(msg);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
 
   const load = () => {
     setLoading(true);
@@ -127,6 +195,31 @@ export function Alamat() {
               <X size={16} />
             </button>
           </div>
+
+          {/* Quick-fill via geolocation. Nominatim reverse-geocode OSM (free).
+              User bisa koreksi manual setelah auto-fill. */}
+          <button
+            onClick={useCurrentLocation}
+            disabled={locating}
+            type="button"
+            className="w-full mb-3 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-cherry-300 text-cherry-500 text-sm font-bold hover:bg-cherry-50 disabled:opacity-60"
+          >
+            {locating ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Mengambil lokasi…
+              </>
+            ) : (
+              <>
+                <Navigation size={14} />
+                Gunakan Lokasi Saya
+              </>
+            )}
+          </button>
+          <p className="text-xs text-ink-500 mb-3">
+            Isi otomatis dari GPS. Cek dan koreksi manual kalau kurang tepat.
+          </p>
+
           <div className="flex flex-col gap-3">
             {[
               { key: "label" as const, ph: "Label (mis. Rumah, Kantor)" },
