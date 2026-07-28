@@ -6,9 +6,10 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
-  addressApi, checkoutApi, formatRp, pgChannelsApi,
+  addressApi, checkoutApi, formatRp, pgChannelsApi, publicApi,
   type Address, type ShippingRate, type ShippingRatesResponse,
   type PGChannel, type PGChannelGroup, type PGChannelCategory,
+  type EcomProductDetail,
 } from "@/lib/api";
 import { useCart, refreshCart } from "@/lib/cartStore";
 import { trackEvent } from "@/lib/analytics";
@@ -85,6 +86,20 @@ export function Checkout() {
   const [applyingVoucher, setApplyingVoucher] = useState(false);
   const [appliedVoucher, setAppliedVoucher] = useState<{ code: string; discount: number; description?: string } | null>(null);
 
+  // Buy-now: fetch produk detail supaya bisa tampil nama + harga + subtotal
+  // real (bukan placeholder "—"). Cart mode ambil dari useCart, tidak perlu
+  // fetch tambahan. Failed fetch → item skip render, checkout tetap bisa jalan
+  // (BE re-verify harga).
+  const [buyNowProducts, setBuyNowProducts] = useState<EcomProductDetail[]>([]);
+  useEffect(() => {
+    if (!isBuyNow || ctx.mode !== "buy_now") return;
+    Promise.all(
+      ctx.buy_now_items.map((bn) => publicApi.getProduct(bn.product_id).catch(() => null))
+    ).then((results) => {
+      setBuyNowProducts(results.filter((p): p is EcomProductDetail => p !== null));
+    });
+  }, [isBuyNow, ctx]);
+
   // PG channels — di-fetch langsung dari alifworks (public endpoint). Grup
   // by category (VA / QRIS / e-wallet / kartu kredit) sesuai preferensi
   // Bu Santi. Loading state di-tampilkan di section pembayaran; kalau fetch
@@ -148,11 +163,15 @@ export function Checkout() {
 
   // Compute local subtotal untuk display (BE tetap re-verify di CreateOrder).
   const localSubtotal = useMemo(() => {
-    if (isBuyNow) {
-      // Buy-now — kita belum tahu harga dari cart. Ambil dari rates response
-      // (tidak provide) — untuk MVP display placeholder, actual total datang
-      // dari CreateOrder response.
-      return 0;
+    if (isBuyNow && ctx.mode === "buy_now") {
+      // Buy-now — hitung dari produk yang sudah di-fetch. Kalau ada item
+      // yang belum ke-fetch (network gagal), skip. BE re-verify saat checkout.
+      return ctx.buy_now_items.reduce((sum, bn) => {
+        const p = buyNowProducts.find((x) => x.id === bn.product_id);
+        if (!p) return sum;
+        const price = p.ecom_price ?? p.selling_price;
+        return sum + price * bn.quantity;
+      }, 0);
     }
     if (!cart) return 0;
     if (!selectedIds || selectedIds.length === 0) return cart.subtotal;
@@ -160,7 +179,7 @@ export function Checkout() {
     return cart.items
       .filter((i) => set.has(i.id) && !i.unavailable)
       .reduce((s, i) => s + i.subtotal, 0);
-  }, [cart, selectedIds, isBuyNow]);
+  }, [cart, selectedIds, isBuyNow, ctx, buyNowProducts]);
 
   const localItemCount = useMemo(() => {
     if (isBuyNow) return ctx.mode === "buy_now" ? ctx.buy_now_items.length : 0;
@@ -619,13 +638,73 @@ export function Checkout() {
             Ringkasan {isBuyNow && "(Beli Langsung)"}
           </h2>
         </div>
+
+        {/* List item — cart mode dari useCart, buy-now dari fetched products.
+            Cegah UX bingung "kenapa produk yang saya klik tidak muncul". */}
+        {isBuyNow && ctx.mode === "buy_now" && (
+          <ul className="mb-3 space-y-2 border-b border-cherry-100 pb-3">
+            {ctx.buy_now_items.map((bn) => {
+              const p = buyNowProducts.find((x) => x.id === bn.product_id);
+              const price = p ? (p.ecom_price ?? p.selling_price) : 0;
+              return (
+                <li key={bn.product_id} className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-cherry-50 border border-cherry-100 shrink-0 overflow-hidden flex items-center justify-center">
+                    {p?.ecom_image ? (
+                      // eslint-disable-next-line jsx-a11y/alt-text
+                      <img src={p.ecom_image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package size={18} className="text-cherry-300" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-ink-900 truncate">
+                      {p?.name_id || "Memuat produk…"}
+                    </p>
+                    <p className="text-xs text-ink-500">
+                      {bn.quantity} × {p ? formatRp(price) : "—"}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-ink-900 shrink-0">
+                    {p ? formatRp(price * bn.quantity) : "—"}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {!isBuyNow && cart && (
+          <ul className="mb-3 space-y-2 border-b border-cherry-100 pb-3">
+            {cart.items
+              .filter((i) => !i.unavailable && (!selectedIds || selectedIds.includes(i.id)))
+              .map((it) => (
+                <li key={it.id} className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-cherry-50 border border-cherry-100 shrink-0 overflow-hidden flex items-center justify-center">
+                    {it.image ? (
+                      // eslint-disable-next-line jsx-a11y/alt-text
+                      <img src={it.image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package size={18} className="text-cherry-300" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-ink-900 truncate">{it.name_id || it.name}</p>
+                    <p className="text-xs text-ink-500">
+                      {it.quantity} × {formatRp(it.price)}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-ink-900 shrink-0">{formatRp(it.subtotal)}</p>
+                </li>
+              ))}
+          </ul>
+        )}
+
         <dl className="text-sm space-y-2">
           <div className="flex justify-between">
             <dt className="text-ink-700">
               Subtotal ({localTotalQty} item{localItemCount > 1 ? `, ${localItemCount} produk` : ""})
             </dt>
             <dd className="font-bold text-ink-900">
-              {isBuyNow ? "—" : formatRp(localSubtotal)}
+              {formatRp(localSubtotal)}
             </dd>
           </div>
           <div className="flex justify-between">
@@ -643,7 +722,7 @@ export function Checkout() {
           <div className="border-t border-cherry-100 pt-2 mt-2 flex justify-between items-center">
             <dt className="text-base font-black text-ink-900">Total</dt>
             <dd className="text-xl font-black text-cherry-500">
-              {isBuyNow && !selectedRate ? "—" : formatRp(total)}
+              {!selectedRate ? "—" : formatRp(total)}
             </dd>
           </div>
         </dl>
