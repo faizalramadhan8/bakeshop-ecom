@@ -429,6 +429,9 @@ export interface Address {
   district: string;
   subdistrict: string;
   zipcode: string;
+  // Biteship area_id dari Maps API — unlock coverage kurir yang butuh presisi
+  // (Anteraja, Ninja, ID Express). Null untuk alamat lama.
+  biteship_area_id?: string;
   street_address: string;
   notes?: string;
   is_default: boolean;
@@ -443,9 +446,21 @@ export interface AddressPayload {
   district: string;
   subdistrict: string;
   zipcode: string;
+  biteship_area_id?: string;
   street_address: string;
   notes?: string;
   is_default: boolean;
+}
+
+// Biteship Area — response dari GET /ecom/shipping/areas?q=...
+export interface BiteshipArea {
+  id: string;
+  name: string;                              // "Pesanggrahan, Jakarta Selatan, DKI Jakarta. 12250"
+  country_code: string;
+  postal_code: number;
+  administrative_division_level_1_name: string; // Province
+  administrative_division_level_2_name: string; // City
+  administrative_division_level_3_name: string; // District
 }
 
 export const addressApi = {
@@ -453,6 +468,13 @@ export const addressApi = {
   create: (data: AddressPayload) => request<Address>("POST", "/ecom/addresses", data, "customer"),
   update: (id: string, data: AddressPayload) => request<Address>("PUT", `/ecom/addresses/${id}`, data, "customer"),
   remove: (id: string) => request<null>("DELETE", `/ecom/addresses/${id}`, undefined, "customer"),
+};
+
+// Public — no auth. Dipakai address form autocomplete + kalau nanti register
+// flow tambah alamat.
+export const shippingApi = {
+  searchAreas: (q: string) =>
+    request<BiteshipArea[]>("GET", `/ecom/shipping/areas?q=${encodeURIComponent(q)}`),
 };
 
 // ─── Checkout API (Fase 3c-3d) ──────────────────────────────────────
