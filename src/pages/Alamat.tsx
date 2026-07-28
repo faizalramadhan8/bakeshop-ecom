@@ -316,11 +316,11 @@ export function Alamat() {
               {form.biteship_area_id ? (
                 <p className="text-xs text-cherry-600 mt-1 flex items-center gap-1">
                   <Check size={11} aria-hidden="true" />
-                  Alamat presisi Biteship terset
+                  Alamat sudah tepat
                 </p>
               ) : (
                 <p className="text-xs text-ink-500 mt-1">
-                  Pilih dari hasil pencarian untuk alamat lebih presisi + pilihan kurir lebih lengkap.
+                  Pilih dari hasil pencarian supaya pilihan kurir lebih lengkap.
                 </p>
               )}
 
@@ -418,9 +418,14 @@ export function Alamat() {
       {loading ? (
         <p className="text-center text-ink-500 py-8">Memuat…</p>
       ) : addresses.length === 0 && !showForm ? (
-        <div className="py-12 text-center text-ink-500">
-          <MapPin size={40} className="mx-auto opacity-30 mb-2" />
-          <p className="text-sm">Belum ada alamat tersimpan</p>
+        <div className="py-14 text-center">
+          <div className="w-20 h-20 rounded-full bg-cherry-50 mx-auto mb-4 flex items-center justify-center">
+            <MapPin size={40} className="text-cherry-300" aria-hidden="true" />
+          </div>
+          <p className="text-base font-black text-ink-900 mb-1">Belum ada alamat</p>
+          <p className="text-sm text-ink-500 max-w-xs mx-auto leading-relaxed">
+            Tambahkan alamat pengiriman supaya proses checkout jadi lebih cepat.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">

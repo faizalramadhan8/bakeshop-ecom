@@ -38,16 +38,20 @@ export function Pesanan() {
       {loading ? (
         <p className="text-center text-ink-500 py-8">Memuat…</p>
       ) : orders.length === 0 ? (
-        <div className="py-12 text-center text-ink-500">
-          <Receipt size={48} className="mx-auto opacity-30 mb-3" />
-          <p className="text-sm font-semibold">Belum ada pesanan</p>
-          <p className="text-xs mt-1">Yuk mulai belanja</p>
+        <div className="py-14 text-center">
+          <div className="w-20 h-20 rounded-full bg-cherry-50 mx-auto mb-4 flex items-center justify-center">
+            <Receipt size={40} className="text-cherry-300" aria-hidden="true" />
+          </div>
+          <p className="text-base font-black text-ink-900 mb-1">Belum ada pesanan</p>
+          <p className="text-sm text-ink-500 mb-5 max-w-xs mx-auto leading-relaxed">
+            Yuk mulai belanja bahan kue favoritmu. Semua pesanan bakal tampil di sini.
+          </p>
           <Link
             to="/kategori"
-            className="inline-flex items-center gap-2 mt-4 px-5 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-black bg-gradient-to-r from-cherry-500 to-cherry-600 shadow-md active:scale-[0.98]"
           >
-            <Package size={14} />
-            Lihat Katalog
+            <Package size={14} aria-hidden="true" />
+            Mulai Belanja
           </Link>
         </div>
       ) : (

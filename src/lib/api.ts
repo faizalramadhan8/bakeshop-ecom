@@ -380,6 +380,28 @@ export function formatRp(n: number | null | undefined): string {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
+// formatETD — normalize response ETD Biteship ke bahasa Indonesia.
+// Contoh input yang di-cover:
+//   "1 - 2 days" → "1-2 hari"
+//   "1 days" (grammar salah dari Biteship) → "1 hari" / "Besok sampai"
+//   "1 day" → "Besok sampai"
+//   "2-3 hari" (dari stub kita) → "2-3 hari" (pass-through)
+//   "" atau null → "Estimasi menyusul"
+// Angka "1 hari" khusus di-idiomatis ke "Besok sampai" — pattern
+// Tokopedia/Shopee — lebih natural dari "1 hari".
+export function formatETD(etd: string | undefined | null): string {
+  if (!etd) return "Estimasi menyusul";
+  let s = etd.trim();
+  // Normalize whitespace + strip "days"/"day" → "hari".
+  s = s.replace(/\s+/g, " ").replace(/\s*-\s*/g, "-");
+  s = s.replace(/\bdays?\b/gi, "hari").replace(/\bhour(s)?\b/gi, "jam");
+  // "1 hari" / "1hari" → "Besok sampai" (idiomatic).
+  if (/^1\s*hari$/i.test(s)) return "Besok sampai tujuan";
+  // Kalau tinggal angka aja (kadang Biteship return "2"), asumsi hari.
+  if (/^\d+$/.test(s)) return `${s} hari`;
+  return s;
+}
+
 // ─── Customer Cart API (Fase 3) ─────────────────────────────────────
 export interface CartItem {
   id: string;

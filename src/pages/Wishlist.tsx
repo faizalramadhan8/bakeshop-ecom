@@ -64,18 +64,20 @@ export function Wishlist() {
           ))}
         </div>
       ) : products.length === 0 ? (
-        <div className="py-16 text-center bg-white rounded-2xl border border-cherry-200">
-          <Package size={40} className="mx-auto text-ink-500 opacity-40 mb-2" aria-hidden="true" />
-          <p className="text-sm font-bold text-ink-900">Wishlist masih kosong</p>
-          <p className="text-xs text-ink-500 mt-1">
-            Tap ikon <Heart size={12} className="inline text-cherry-500" aria-hidden="true" /> di produk
-            untuk simpan buat nanti.
+        <div className="py-14 text-center bg-white rounded-2xl border border-cherry-200">
+          <div className="w-20 h-20 rounded-full bg-cherry-50 mx-auto mb-4 flex items-center justify-center">
+            <Heart size={40} className="text-cherry-300" aria-hidden="true" />
+          </div>
+          <p className="text-base font-black text-ink-900 mb-1">Wishlist masih kosong</p>
+          <p className="text-sm text-ink-500 max-w-xs mx-auto leading-relaxed">
+            Simpan produk favoritmu dengan tap ikon <Heart size={12} className="inline text-cherry-500" aria-hidden="true" /> di kartu produk.
           </p>
           <Link
             to="/kategori"
-            className="inline-block mt-4 px-5 py-2.5 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
+            className="inline-flex items-center gap-2 mt-5 px-6 py-3 rounded-xl text-white text-sm font-black bg-gradient-to-r from-cherry-500 to-cherry-600 shadow-md active:scale-[0.98]"
           >
-            Jelajah Produk
+            <Package size={14} aria-hidden="true" />
+            Jelajahi Produk
           </Link>
         </div>
       ) : (

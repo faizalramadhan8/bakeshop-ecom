@@ -92,7 +92,7 @@ export function Home() {
             </div>
           ) : categories.length === 0 ? (
             <div className="py-8 text-center text-ink-500">
-              <p className="text-sm">Belum ada kategori tersedia</p>
+              <p className="text-sm">Kategori belum tersedia. Cek lagi sebentar lagi ya.</p>
             </div>
           ) : (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
@@ -139,11 +139,13 @@ export function Home() {
               ))}
             </div>
           ) : featured.length === 0 ? (
-            <div className="py-8 text-center text-ink-500">
-              <PackageIcon size={40} className="mx-auto opacity-30 mb-2" aria-hidden="true" />
-              <p className="text-sm">Belum ada produk yang tayang online</p>
-              <p className="text-xs mt-1">
-                Admin bisa publish produk via Admin Panel
+            <div className="py-10 text-center">
+              <div className="w-16 h-16 rounded-full bg-cherry-50 mx-auto mb-3 flex items-center justify-center">
+                <PackageIcon size={30} className="text-cherry-300" aria-hidden="true" />
+              </div>
+              <p className="text-sm font-black text-ink-900 mb-1">Produk sedang disiapkan</p>
+              <p className="text-xs text-ink-500 max-w-xs mx-auto leading-relaxed">
+                Katalog kami sedang di-update. Cek lagi nanti ya, banyak bahan kue kekinian yang akan hadir.
               </p>
             </div>
           ) : (

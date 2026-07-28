@@ -5,7 +5,8 @@ import {
   PackageCheck, Star, X, Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ordersApi, accountApi, formatRp, type CustomerOrderDetail } from "@/lib/api";
+import { ordersApi, accountApi, formatRp, formatETD, type CustomerOrderDetail } from "@/lib/api";
+import { CourierLogo } from "@/components/CourierLogo";
 
 // Map courier name (case-insensitive substring) → tracking URL template.
 // Return null kalau kurir tidak dikenal — FE hide tombol lacak.
@@ -106,7 +107,7 @@ export function PesananDetail() {
     return (
       <div className="max-w-3xl mx-auto p-6 text-center py-16">
         <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" />
-        <p className="text-sm font-semibold text-cherry-600">{error || "Order tidak ditemukan"}</p>
+        <p className="text-sm font-semibold text-cherry-600">{error || "Pesanan tidak ditemukan"}</p>
         <Link to="/pesanan" className="inline-block mt-4 text-sm text-cherry-500 underline">
           Kembali ke daftar pesanan
         </Link>
@@ -133,13 +134,13 @@ export function PesananDetail() {
 
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-xs text-ink-500">Order ID</p>
+          <p className="text-xs text-ink-500">No. Pesanan</p>
           <p className="text-sm font-bold text-ink-900 font-mono">{order.id.slice(0, 8)}</p>
         </div>
         <button
           onClick={() => {
             navigator.clipboard.writeText(order.id);
-            toast.success("Order ID disalin");
+            toast.success("No. pesanan disalin");
           }}
           className="text-xs text-cherry-500 hover:text-cherry-600 inline-flex items-center gap-1"
         >
@@ -337,13 +338,13 @@ export function PesananDetail() {
           {order.shipping.address.district}, {order.shipping.address.city},{" "}
           {order.shipping.address.province} {order.shipping.address.zipcode}
         </p>
-        <div className="flex items-center gap-2 pt-3 border-t border-cherry-100">
-          <Truck size={16} className="text-cherry-500" />
-          <div className="flex-1">
-            <p className="text-sm font-bold text-ink-900">
-              {order.shipping.courier} — {order.shipping.service_name}
+        <div className="flex items-center gap-3 pt-3 border-t border-cherry-100">
+          <CourierLogo courier={order.shipping.courier} size={36} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-ink-900 truncate">
+              {order.shipping.courier} · {order.shipping.service_name}
             </p>
-            <p className="text-xs text-ink-500">Estimasi {order.shipping.etd}</p>
+            <p className="text-xs text-ink-500">Estimasi {formatETD(order.shipping.etd)}</p>
           </div>
         </div>
         {order.shipping.awb && (

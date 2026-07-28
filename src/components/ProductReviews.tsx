@@ -221,10 +221,14 @@ export function ProductReviews({ productId }: { productId: string }) {
       {loading ? (
         <div className="py-8 text-center text-ink-500 text-sm">Memuat ulasan…</div>
       ) : items.length === 0 ? (
-        <div className="py-8 text-center bg-white rounded-2xl border border-cherry-100">
-          <MessageSquare size={32} className="mx-auto text-ink-500 opacity-40 mb-2" aria-hidden="true" />
-          <p className="text-sm text-ink-700">Belum ada ulasan</p>
-          <p className="text-xs text-ink-500 mt-1">Jadilah yang pertama beri ulasan.</p>
+        <div className="py-10 text-center bg-white rounded-2xl border border-cherry-100">
+          <div className="w-16 h-16 rounded-full bg-cherry-50 mx-auto mb-3 flex items-center justify-center">
+            <MessageSquare size={28} className="text-cherry-300" aria-hidden="true" />
+          </div>
+          <p className="text-sm font-black text-ink-900 mb-1">Belum ada ulasan</p>
+          <p className="text-xs text-ink-500 max-w-xs mx-auto leading-relaxed">
+            Jadilah yang pertama beri ulasan produk ini. Bantu customer lain memilih dengan yakin.
+          </p>
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
