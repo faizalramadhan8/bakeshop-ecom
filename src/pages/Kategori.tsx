@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Package, ArrowLeft } from "lucide-react";
 import { publicApi, type EcomCategory, type EcomProductListItem } from "@/lib/api";
 import { ProductCard } from "@/components/ProductCard";
+import { useSEO } from "@/lib/seo";
 
 type SortKey = "" | "price_asc" | "price_desc" | "name";
 
@@ -23,6 +24,18 @@ export function Kategori() {
   const [categories, setCategories] = useState<EcomCategory[]>([]);
   const [products, setProducts] = useState<EcomProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const activeCat = slug ? categories.find((c) => c.id === slug) : null;
+  useSEO({
+    title: activeCat
+      ? `Kategori ${activeCat.name_id || activeCat.name}`
+      : search
+      ? `Cari: ${search}`
+      : "Semua Kategori",
+    description: activeCat
+      ? `Belanja produk ${activeCat.name_id || activeCat.name} di TBK Santi. Harga grosir, kirim seluruh Indonesia.`
+      : "Jelajahi semua kategori bahan kue di TBK Santi.",
+  });
 
   useEffect(() => {
     publicApi.listCategories().then((c) => setCategories(c || [])).catch(() => {});

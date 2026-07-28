@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import "./index.css";
 import App from "./App";
+import { initAnalytics } from "@/lib/analytics";
+
+// Init GA4 + Meta Pixel (kalau env var di-set saat build).
+initAnalytics();
 
 // basename "/shop" match dengan Vite base config + POS nginx routing.
 // react-router treat this as prefix untuk semua route.

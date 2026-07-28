@@ -28,9 +28,12 @@ export function AdminProdukEdit() {
   const [ecomImage, setEcomImage] = useState<string | null>(null);
   const [ecomCategoryId, setEcomCategoryId] = useState<string>("");
   const [categories, setCategories] = useState<EcomCategoryAdmin[]>([]);
+  const [ecomImages, setEcomImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const claims = decodeToken();
@@ -56,6 +59,7 @@ export function AdminProdukEdit() {
         setMinOrder(String(p.ecom_min_order));
         setDesc(p.ecom_description ?? "");
         setEcomImage(p.ecom_image ?? null);
+        setEcomImages(p.ecom_images ?? []);
         setEcomCategoryId(p.ecom_category_id ?? "");
       })
       .catch((err) => {
@@ -83,6 +87,7 @@ export function AdminProdukEdit() {
         ecom_min_order: Number(minOrder) || 1,
         ecom_description: desc.trim() || null,
         ecom_image: ecomImage,
+        ecom_images: ecomImages,
         ecom_category_id: ecomCategoryId || null,
       });
       setProduct(updated);
@@ -113,6 +118,49 @@ export function AdminProdukEdit() {
     } finally {
       setUploading(false);
     }
+  };
+
+  // Gallery upload — support MULTIPLE files sekaligus (mobile Safari allow
+  // multiple pick, desktop pasti). Cap 5 gambar total per produk (1 utama +
+  // 4 tambahan) supaya customer tidak overwhelmed + payload manageable.
+  const MAX_GALLERY = 4;
+  const handleGalleryChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    const remaining = MAX_GALLERY - ecomImages.length;
+    if (remaining <= 0) {
+      toast.error(`Maksimal ${MAX_GALLERY} gambar tambahan`);
+      return;
+    }
+    const toUpload = files.slice(0, remaining);
+    if (files.length > remaining) {
+      toast(`Cuma ${remaining} slot tersisa. ${files.length - remaining} file di-skip.`);
+    }
+    setUploadingGallery(true);
+    try {
+      const uploaded: string[] = [];
+      for (const f of toUpload) {
+        if (f.size > 5 * 1024 * 1024) {
+          toast.error(`${f.name}: max 5 MB, di-skip`);
+          continue;
+        }
+        const res = await adminApi.uploadImage(f);
+        uploaded.push(res.url);
+      }
+      if (uploaded.length > 0) {
+        setEcomImages((prev) => [...prev, ...uploaded]);
+        toast.success(`${uploaded.length} gambar ditambah. Simpan untuk apply.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal upload gallery");
+    } finally {
+      setUploadingGallery(false);
+    }
+  };
+
+  const removeGalleryImage = (url: string) => {
+    setEcomImages((prev) => prev.filter((u) => u !== url));
   };
 
   if (loading) {
@@ -299,6 +347,64 @@ export function AdminProdukEdit() {
               </button>
             </div>
             <p className="text-xs text-ink-500 mt-2">Max 5 MB. Format: JPG, PNG, WebP.</p>
+          </section>
+
+          <section className="bg-white rounded-2xl border border-cherry-200 p-5">
+            <h2 className="text-sm font-black text-ink-900 mb-3">Foto Tambahan (Gallery)</h2>
+            <p className="text-xs text-ink-500 mb-3">
+              Sampai {MAX_GALLERY} foto tambahan (angle lain / detail / kemasan / hasil masakan).
+              Customer bisa swipe di halaman produk.
+            </p>
+
+            {/* Grid preview 2/3/4 kolom responsive */}
+            {ecomImages.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                {ecomImages.map((url, i) => (
+                  <div key={url} className="relative aspect-square rounded-xl overflow-hidden border border-cherry-200 bg-cherry-50">
+                    <img src={url} alt={`Foto tambahan ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeGalleryImage(url)}
+                      aria-label={`Hapus foto ${i + 1}`}
+                      className="absolute top-1 right-1 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                    >
+                      <X size={12} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Hidden input support multiple */}
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleGalleryChange}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={uploadingGallery || ecomImages.length >= MAX_GALLERY}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-cherry-300 text-cherry-500 text-sm font-bold hover:bg-cherry-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {uploadingGallery ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  Mengupload…
+                </>
+              ) : (
+                <>
+                  <Upload size={14} aria-hidden="true" />
+                  {ecomImages.length >= MAX_GALLERY
+                    ? `Slot penuh (${MAX_GALLERY} / ${MAX_GALLERY})`
+                    : `Tambah Foto (${ecomImages.length} / ${MAX_GALLERY})`}
+                </>
+              )}
+            </button>
           </section>
 
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">

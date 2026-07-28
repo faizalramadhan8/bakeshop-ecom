@@ -1,4 +1,6 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { trackPageView } from "@/lib/analytics";
 import { ShopLayout } from "@/components/ShopLayout";
 import { Home } from "@/pages/Home";
 import { Kategori } from "@/pages/Kategori";
@@ -14,9 +16,28 @@ import { AdminDashboard } from "@/pages/AdminDashboard";
 import { AdminProdukList } from "@/pages/AdminProdukList";
 import { AdminProdukEdit } from "@/pages/AdminProdukEdit";
 import { AdminKategori } from "@/pages/AdminKategori";
+import { AdminPesananList } from "@/pages/AdminPesananList";
+import { AdminPesananDetail } from "@/pages/AdminPesananDetail";
+import { AdminVoucher } from "@/pages/AdminVoucher";
+import { Profil } from "@/pages/Profil";
+import { LupaPassword } from "@/pages/LupaPassword";
+import { Wishlist } from "@/pages/Wishlist";
+import { Cari } from "@/pages/Cari";
+
+// AnalyticsListener — fire GA4 page_view + Meta PageView pada SPA route change.
+// Ini terpisah dari App biar useLocation ada di dalam <BrowserRouter>.
+function AnalyticsListener() {
+  const loc = useLocation();
+  useEffect(() => {
+    trackPageView(loc.pathname + loc.search);
+  }, [loc.pathname, loc.search]);
+  return null;
+}
 
 export default function App() {
   return (
+    <>
+    <AnalyticsListener />
     <Routes>
       {/* Public storefront routes wrapped in shared Layout */}
       <Route element={<ShopLayout />}>
@@ -27,11 +48,16 @@ export default function App() {
         <Route path="/keranjang" element={<Keranjang />} />
         <Route path="/akun" element={<Akun />} />
         <Route path="/akun/alamat" element={<Alamat />} />
+        <Route path="/akun/profil" element={<Profil />} />
+        <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/pesanan" element={<Pesanan />} />
         <Route path="/pesanan/:id" element={<PesananDetail />} />
-        <Route path="/cari" element={<Kategori />} />
+        <Route path="/cari" element={<Cari />} />
       </Route>
+
+      {/* Public standalone (no ShopLayout — user belum login) */}
+      <Route path="/lupa-password" element={<LupaPassword />} />
 
       {/* Admin routes (no Layout) */}
       <Route path="/admin/login" element={<AdminLogin />} />
@@ -39,8 +65,12 @@ export default function App() {
       <Route path="/admin/produk" element={<AdminProdukList />} />
       <Route path="/admin/produk/:id" element={<AdminProdukEdit />} />
       <Route path="/admin/kategori" element={<AdminKategori />} />
+      <Route path="/admin/pesanan" element={<AdminPesananList />} />
+      <Route path="/admin/pesanan/:id" element={<AdminPesananDetail />} />
+      <Route path="/admin/voucher" element={<AdminVoucher />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

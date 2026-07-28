@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft, Tag } from "lucide-react";
+import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft, Tag, Ticket } from "lucide-react";
 import { setToken, decodeToken } from "@/lib/api";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -29,11 +29,16 @@ export function AdminDashboard() {
       desc: "Kelompok produk khusus storefront (terpisah dari kategori POS)",
     },
     {
-      to: "#",
+      to: "/admin/voucher",
+      icon: <Ticket size={20} />,
+      title: "Voucher & Promo",
+      desc: "Kode diskon percent/fixed, kuota, expiry, min belanja",
+    },
+    {
+      to: "/admin/pesanan",
       icon: <ShoppingCart size={20} />,
       title: "Pesanan Online",
-      desc: "Terima + proses order dari customer",
-      disabled: true,
+      desc: "Terima, proses, kirim, input resi pesanan customer",
     },
     {
       to: "#",

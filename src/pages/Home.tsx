@@ -5,8 +5,10 @@ import { publicApi, type EcomCategory, type EcomProductListItem } from "@/lib/ap
 import { ProductCard } from "@/components/ProductCard";
 import { BakeryLogo } from "@/components/BakeryLogo";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { useSEO } from "@/lib/seo";
 
 export function Home() {
+  useSEO({}); // default title/desc dari template
   const [categories, setCategories] = useState<EcomCategory[]>([]);
   const [featured, setFeatured] = useState<EcomProductListItem[]>([]);
   const [loading, setLoading] = useState(true);

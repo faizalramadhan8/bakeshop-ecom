@@ -4,6 +4,10 @@ import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag, Check }
 import toast from "react-hot-toast";
 import { publicApi, formatRp, type EcomProductDetail } from "@/lib/api";
 import { addToCart } from "@/lib/cartStore";
+import { ProductGallery } from "@/components/ProductGallery";
+import { ProductReviews } from "@/components/ProductReviews";
+import { useSEO, productJsonLD } from "@/lib/seo";
+import { trackEvent } from "@/lib/analytics";
 
 function formatWeight(grams?: number): string {
   if (!grams) return "";
@@ -46,6 +50,30 @@ export function Produk() {
     };
   }, [id]);
 
+  // GA4 view_item — fire sekali per produk (guard biar tidak double di StrictMode).
+  useEffect(() => {
+    if (!product) return;
+    trackEvent("view_item", {
+      currency: "IDR",
+      value: product.price,
+      items: [{ item_id: product.id, item_name: product.name_id, price: product.price }],
+    });
+  }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // SEO — dynamic per produk. Title + description + JSON-LD Product supaya
+  // Google rich snippet muncul (harga + stok + brand).
+  useSEO({
+    title: product?.name_id,
+    description: product?.description
+      ? product.description.slice(0, 155) + "…"
+      : product?.name_id
+      ? `Beli ${product.name_id} di TBK Santi. Harga Rp ${Math.round(product.price).toLocaleString("id-ID")}. Kirim seluruh Indonesia.`
+      : undefined,
+    image: product?.image ? (product.image.startsWith("http") ? product.image : "https://tbksanti.id" + product.image) : undefined,
+    canonical: id ? `/shop/produk/${id}` : undefined,
+    jsonLD: product ? productJsonLD(product) : undefined,
+  });
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-4">
@@ -85,12 +113,38 @@ export function Produk() {
     try {
       await addToCart(product.id, qty);
       toast.success(`${qty} × ${product.name_id} ditambahkan ke keranjang`);
+      // GA4 + Meta Pixel — add_to_cart standard e-commerce event.
+      trackEvent("add_to_cart", {
+        currency: "IDR",
+        value: effectivePrice * qty,
+        items: [{ item_id: product.id, item_name: product.name_id, price: effectivePrice, quantity: qty }],
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Gagal menambahkan ke keranjang";
       toast.error(msg);
     } finally {
       setAdding(false);
     }
+  };
+
+  // Beli Sekarang — bypass cart, langsung ke checkout dengan produk ini saja.
+  // Session-scoped context via sessionStorage — hilang saat tab close (safe).
+  const handleBuyNow = () => {
+    if (!product) return;
+    sessionStorage.setItem(
+      "checkoutContext",
+      JSON.stringify({
+        mode: "buy_now",
+        buy_now_items: [{ product_id: product.id, quantity: qty }],
+      })
+    );
+    // GA4 begin_checkout event.
+    trackEvent("begin_checkout", {
+      currency: "IDR",
+      value: effectivePrice * qty,
+      items: [{ item_id: product.id, item_name: product.name_id, price: effectivePrice, quantity: qty }],
+    });
+    navigate("/checkout");
   };
 
   const changeQty = (delta: number) => {
@@ -116,29 +170,14 @@ export function Produk() {
       </button>
 
       <div className="grid sm:grid-cols-2 gap-6">
-        {/* Image */}
-        <div className="aspect-square bg-cherry-50 rounded-2xl border border-cherry-100 relative flex items-center justify-center overflow-hidden">
-          {product.image ? (
-            // eslint-disable-next-line jsx-a11y/alt-text
-            <img
-              src={product.image}
-              alt={product.name_id}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <Package size={80} className="text-cherry-200" />
-          )}
-          {product.weight_grams && (
-            <span className="absolute top-3 left-3 text-xs font-bold px-3 py-1 rounded-lg bg-white/90 text-ink-900">
-              {formatWeight(product.weight_grams)}
-            </span>
-          )}
-          {product.is_low_stock && product.stock > 0 && (
-            <span className="absolute top-3 right-3 text-xs font-bold px-3 py-1 rounded-lg bg-cherry-500 text-white">
-              Sisa {product.stock}
-            </span>
-          )}
-        </div>
+        {/* Gallery — swipe di mobile, thumbnail row + arrow di desktop.
+            Fallback ke [product.image] kalau BE tidak return images. */}
+        <ProductGallery
+          images={product.images && product.images.length > 0 ? product.images : (product.image ? [product.image] : [])}
+          alt={product.name_id}
+          weightBadge={product.weight_grams ? formatWeight(product.weight_grams) : undefined}
+          stockBadge={product.is_low_stock && product.stock > 0 ? `Sisa ${product.stock}` : undefined}
+        />
 
         {/* Info */}
         <div className="flex flex-col gap-3">
@@ -250,14 +289,25 @@ export function Produk() {
                 </span>
               )}
             </div>
-            <button
-              onClick={handleAdd}
-              disabled={adding}
-              className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 disabled:opacity-60 transition-opacity"
-            >
-              <ShoppingBag size={16} />
-              {adding ? "Menambah…" : `Tambah ke Keranjang · ${formatRp(effectivePrice * qty)}`}
-            </button>
+            {/* 2-tombol pattern e-commerce standar: primary "Beli Sekarang"
+                (direct checkout), secondary "+ Keranjang" (build cart). */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleAdd}
+                disabled={adding}
+                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-cherry-300 text-cherry-500 text-sm font-bold hover:bg-cherry-50 disabled:opacity-60"
+              >
+                <ShoppingBag size={16} aria-hidden="true" />
+                {adding ? "…" : "Keranjang"}
+              </button>
+              <button
+                onClick={handleBuyNow}
+                disabled={adding}
+                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 disabled:opacity-60"
+              >
+                Beli Sekarang
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -272,41 +322,51 @@ export function Produk() {
         </section>
       )}
 
+      {/* Reviews (Sprint 5b) — display + submit form (gated ke completed orders) */}
+      <ProductReviews productId={product.id} />
+
       {/* Sticky action bar (mobile) — sits ABOVE BottomNav. BottomNav = fixed
           bottom-0 z-40 tinggi 56px+safe-area; action bar tumpuk di atasnya
           via bottom-14 (56px) + z-50. Tanpa offset ini, action bar
           ke-obscure oleh BottomNav → user tidak lihat tombol beli. */}
       <div
-        className="sm:hidden fixed left-0 right-0 z-50 bg-white border-t border-cherry-200 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
-        style={{ bottom: "calc(56px + env(safe-area-inset-bottom))" }}
+        className="sm:hidden fixed left-0 right-0 z-50 bg-white border-t border-cherry-200 px-3 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] [bottom:calc(56px+env(safe-area-inset-bottom))]"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Qty stepper — compact: 34/28/34 = 96px total */}
           <div className="inline-flex items-center border border-cherry-200 rounded-xl shrink-0">
             <button
               onClick={() => changeQty(-1)}
               disabled={qty <= product.min_order}
               aria-label="Kurang"
-              className="w-10 h-10 flex items-center justify-center hover:bg-cherry-50 disabled:opacity-30"
+              className="w-9 h-11 flex items-center justify-center hover:bg-cherry-50 disabled:opacity-30"
             >
-              <Minus size={16} />
+              <Minus size={14} aria-hidden="true" />
             </button>
-            <span className="w-8 text-center text-sm font-bold">{qty}</span>
+            <span className="w-7 text-center text-sm font-bold">{qty}</span>
             <button
               onClick={() => changeQty(1)}
               disabled={qty >= product.stock}
               aria-label="Tambah"
-              className="w-10 h-10 flex items-center justify-center hover:bg-cherry-50 disabled:opacity-30"
+              className="w-9 h-11 flex items-center justify-center hover:bg-cherry-50 disabled:opacity-30"
             >
-              <Plus size={16} />
+              <Plus size={14} aria-hidden="true" />
             </button>
           </div>
           <button
             onClick={handleAdd}
             disabled={adding}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-60 active:scale-[0.98] transition-transform"
+            aria-label="Tambah ke keranjang"
+            className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center border-2 border-cherry-300 text-cherry-500 disabled:opacity-60"
           >
-            <ShoppingBag size={16} />
-            {adding ? "…" : formatRp(effectivePrice * qty)}
+            <ShoppingBag size={16} aria-hidden="true" />
+          </button>
+          <button
+            onClick={handleBuyNow}
+            disabled={adding}
+            className="flex-1 min-w-0 flex items-center justify-center gap-1 h-11 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-60 active:scale-[0.98] transition-transform"
+          >
+            <span className="truncate">Beli · {formatRp(effectivePrice * qty)}</span>
           </button>
         </div>
       </div>

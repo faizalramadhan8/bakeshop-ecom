@@ -23,6 +23,10 @@
   --font-display: "Proxima Nova", "Proxima Nova Alt", "ProximaNova-Regular",
                   "Mulish", -apple-system, BlinkMacSystemFont, "Segoe UI",
                   Roboto, Helvetica, Arial, system-ui, sans-serif;
+
+  /* Extra breakpoint xs untuk mid-tier phone (~384px+). Cegah element
+     cramp di sticky bars saat viewport 320-360px (iPhone SE 1st gen dst). */
+  --breakpoint-xs: 24rem;
 }
 
 html {
@@ -44,3 +48,8 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 input[type="number"] { -moz-appearance: textfield; }
+
+/* Horizontal scroll containers (chip tabs, gallery thumbnails) — hide
+   scrollbar tapi tetap allow overflow. Applied via className="scrollbar-hide". */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

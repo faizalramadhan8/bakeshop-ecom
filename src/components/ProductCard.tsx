@@ -1,13 +1,33 @@
 import { Link } from "react-router-dom";
 import { type EcomProductListItem, formatRp } from "@/lib/api";
-import { Package } from "lucide-react";
+import { Package, Heart } from "lucide-react";
+import { useWishlistState } from "@/lib/wishlist";
 
 export function ProductCard({ p }: { p: EcomProductListItem }) {
+  const { inWishlist, toggle } = useWishlistState(p.id);
   return (
     <Link
       to={`/produk/${p.id}`}
-      className="group flex flex-col bg-white rounded-2xl border border-cherry-100 overflow-hidden hover:border-cherry-300 hover:shadow-md transition-all"
+      className="group flex flex-col bg-white rounded-2xl border border-cherry-100 overflow-hidden hover:border-cherry-300 hover:shadow-md transition-all relative"
     >
+      {/* Wishlist heart — top-right overlay */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggle();
+        }}
+        aria-label={inWishlist ? "Hapus dari wishlist" : "Simpan ke wishlist"}
+        aria-pressed={inWishlist}
+        className={`absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+          inWishlist
+            ? "bg-cherry-500 text-white shadow-md"
+            : "bg-white/90 text-ink-700 hover:text-cherry-500 shadow-sm"
+        }`}
+      >
+        <Heart size={14} className={inWishlist ? "fill-current" : ""} aria-hidden="true" />
+      </button>
       {/* Image / placeholder */}
       <div className="aspect-square bg-cherry-50 relative flex items-center justify-center overflow-hidden">
         {p.image ? (
@@ -22,14 +42,14 @@ export function ProductCard({ p }: { p: EcomProductListItem }) {
           <Package size={40} className="text-cherry-200" />
         )}
 
-        {/* Stock urgency badge */}
+        {/* Stock urgency badge — bottom-right supaya tidak nabrak heart */}
         {p.is_low_stock && p.stock > 0 && (
-          <span className="absolute top-2 right-2 text-xs font-bold px-2 py-0.5 rounded-md bg-cherry-500 text-white">
+          <span className="absolute bottom-2 right-2 text-xs font-bold px-2 py-0.5 rounded-md bg-cherry-500 text-white">
             Sisa {p.stock}
           </span>
         )}
 
-        {/* Weight badge */}
+        {/* Weight badge — top-left */}
         {p.weight_grams && (
           <span className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-md bg-white/90 text-ink-900">
             {formatWeight(p.weight_grams)}

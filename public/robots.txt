@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+# Private auth-gated pages — hindari crawler waste budget di sini.
+Disallow: /shop/akun
+Disallow: /shop/keranjang
+Disallow: /shop/checkout
+Disallow: /shop/pesanan
+Disallow: /shop/admin
+Disallow: /shop/lupa-password
+
+Sitemap: https://tbksanti.id/shop/sitemap.xml

@@ -6,6 +6,20 @@ import {
 import toast from "react-hot-toast";
 import { ordersApi, formatRp, type CustomerOrderDetail } from "@/lib/api";
 
+// Map courier name (case-insensitive substring) → tracking URL template.
+// Return null kalau kurir tidak dikenal — FE hide tombol lacak.
+function trackingURL(courier: string, awb: string): string | null {
+  if (!awb) return null;
+  const c = courier.toLowerCase();
+  if (c.includes("jne")) return `https://www.jne.co.id/tracking/trace/${encodeURIComponent(awb)}`;
+  if (c.includes("j&t") || c.includes("jnt")) return `https://www.jet.co.id/track?awb=${encodeURIComponent(awb)}`;
+  if (c.includes("sicepat")) return `https://www.sicepat.com/checkAwb/${encodeURIComponent(awb)}`;
+  if (c.includes("anteraja")) return `https://anteraja.id/tracking?awb=${encodeURIComponent(awb)}`;
+  if (c.includes("ninja")) return `https://www.ninjaxpress.co/id-id/tracking?id=${encodeURIComponent(awb)}`;
+  if (c.includes("pos")) return `https://www.posindonesia.co.id/id/tracking?resi=${encodeURIComponent(awb)}`;
+  return null;
+}
+
 const STATUS_STEPS = ["pending_payment", "paid", "processing", "shipped", "completed"];
 const STATUS_LABEL: Record<string, string> = {
   pending_payment: "Menunggu Pembayaran",
@@ -208,20 +222,33 @@ export function PesananDetail() {
           </div>
         </div>
         {order.shipping.awb && (
-          <div className="mt-3 pt-3 border-t border-cherry-100 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-ink-500">No. Resi</p>
-              <p className="text-sm font-bold text-ink-900 font-mono">{order.shipping.awb}</p>
+          <div className="mt-3 pt-3 border-t border-cherry-100">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-ink-500">No. Resi</p>
+                <p className="text-sm font-bold text-ink-900 font-mono">{order.shipping.awb}</p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(order.shipping.awb || "");
+                  toast.success("Resi disalin");
+                }}
+                className="text-xs text-cherry-500 hover:text-cherry-600 inline-flex items-center gap-1"
+              >
+                <Copy size={12} aria-hidden="true" /> Salin
+              </button>
             </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(order.shipping.awb || "");
-                toast.success("Resi disalin");
-              }}
-              className="text-xs text-cherry-500 hover:text-cherry-600 inline-flex items-center gap-1"
-            >
-              <Copy size={12} /> Salin
-            </button>
+            {trackingURL(order.shipping.courier, order.shipping.awb) && (
+              <a
+                href={trackingURL(order.shipping.courier, order.shipping.awb)!}
+                target="_blank"
+                rel="noopener"
+                className="inline-flex items-center gap-1.5 mt-1 px-3 py-2 rounded-lg text-xs font-bold text-cherry-500 border border-cherry-200 hover:bg-cherry-50"
+              >
+                <Truck size={12} aria-hidden="true" />
+                Lacak di {order.shipping.courier}
+              </a>
+            )}
           </div>
         )}
       </div>

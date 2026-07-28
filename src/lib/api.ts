@@ -108,6 +108,34 @@ export const adminApi = {
   deleteCategory: (id: string) =>
     request<null>("DELETE", `/ecom/admin/categories/${id}`, undefined, "admin"),
 
+  // Ecom orders admin (Sprint 1).
+  listOrders: (params?: { status?: string; search?: string; cursor?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.search) q.set("search", params.search);
+    if (params?.cursor) q.set("cursor", params.cursor);
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<EcomAdminOrderListResponse>("GET", `/ecom/admin/orders${qs ? "?" + qs : ""}`, undefined, "admin");
+  },
+  getOrder: (id: string) =>
+    request<CustomerOrderDetail>("GET", `/ecom/admin/orders/${id}`, undefined, "admin"),
+  updateOrderStatus: (id: string, status: string) =>
+    request<CustomerOrderDetail>("PATCH", `/ecom/admin/orders/${id}/status`, { status }, "admin"),
+  setOrderShipping: (id: string, data: { awb: string; courier?: string; service?: string }) =>
+    request<CustomerOrderDetail>("POST", `/ecom/admin/orders/${id}/shipping`, data, "admin"),
+  createBiteshipShipment: (id: string) =>
+    request<CustomerOrderDetail>("POST", `/ecom/admin/orders/${id}/biteship-create`, undefined, "admin"),
+
+  // Sprint 5 — Voucher CRUD.
+  listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),
+  createVoucher: (data: VoucherPayload) =>
+    request<VoucherAdmin>("POST", "/ecom/admin/vouchers", data, "admin"),
+  updateVoucher: (id: string, data: VoucherPayload) =>
+    request<VoucherAdmin>("PUT", `/ecom/admin/vouchers/${id}`, data, "admin"),
+  deleteVoucher: (id: string) =>
+    request<null>("DELETE", `/ecom/admin/vouchers/${id}`, undefined, "admin"),
+
   // Upload gambar produk ecom. Multipart form-data (bypass generic request()
   // yang JSON-only). Endpoint /upload berlaku umum, dipakai POS + ecom.
   uploadImage: async (file: File): Promise<{ url: string; filename: string }> => {
@@ -127,6 +155,32 @@ export const adminApi = {
   },
 };
 
+// ─── Customer self-service (Sprint 2) ─────────────────────────────
+export const accountApi = {
+  getMe: () =>
+    request<{ id: string; email: string; fullname: string; phone: string; role: string }>(
+      "GET", "/auth/session", undefined, "customer"
+    ),
+  updateProfile: (data: { fullname?: string; phone?: string }) =>
+    request<unknown>("PATCH", "/auth/me", data, "customer"),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    request<unknown>("POST", "/auth/me/password", data, "customer"),
+
+  // Password reset via email OTP (public endpoints).
+  requestResetOTP: (email: string) =>
+    request<unknown>("POST", "/auth/password-reset/request", { email }, "public"),
+  confirmResetOTP: (data: { email: string; otp: string; new_password: string }) =>
+    request<unknown>("POST", "/auth/password-reset/confirm", data, "public"),
+
+  // Reviews — customer submit/update review.
+  checkReviewEligibility: (productId: string) =>
+    request<{ can_review: boolean; my_review?: ReviewItem }>(
+      "GET", `/ecom/products/${productId}/reviews/me`, undefined, "customer"
+    ),
+  submitReview: (data: { product_id: string; rating: number; comment?: string }) =>
+    request<unknown>("POST", "/ecom/reviews", data, "customer"),
+};
+
 export interface EcomAdminProduct {
   id: string;
   name: string;
@@ -142,6 +196,7 @@ export interface EcomAdminProduct {
   ecom_is_available: boolean;
   ecom_description: string | null;
   ecom_image: string | null;
+  ecom_images?: string[];
   ecom_category_id: string | null;
   ecom_category_name?: string;
   ecom_weight_grams: number | null;
@@ -155,6 +210,7 @@ export interface EcomFieldsPayload {
   ecom_is_available?: boolean;
   ecom_description?: string | null;
   ecom_image?: string | null;
+  ecom_images?: string[];
   ecom_category_id?: string | null;
   ecom_weight_grams?: number | null;
   ecom_min_order?: number;
@@ -168,6 +224,78 @@ export interface EcomCategoryAdmin {
   sort_order: number;
   is_active: boolean;
   product_count: number;
+}
+
+// ─── Ecom Admin Orders (Sprint 1) ────────────────────────────────
+export interface EcomAdminOrderListItem {
+  id: string;
+  total: number;
+  shipping_cost: number;
+  ecom_status: string;
+  item_count: number;
+  recipient: string;
+  courier?: string;
+  awb?: string;
+  created_at: string;
+  payment_method?: string;
+}
+
+export interface EcomAdminOrderListResponse {
+  items: EcomAdminOrderListItem[];
+  next_cursor?: string;
+  counts_by_status: Record<string, number>;
+}
+
+// Sprint 5 — Voucher.
+export interface VoucherAdmin {
+  id: string;
+  code: string;
+  description?: string;
+  type: "percent" | "fixed";
+  value: number;
+  min_subtotal: number;
+  max_discount?: number;
+  usage_limit: number;
+  used_count: number;
+  starts_at?: string;
+  expires_at?: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface VoucherPayload {
+  code: string;
+  description?: string;
+  type: "percent" | "fixed";
+  value: number;
+  min_subtotal?: number;
+  max_discount?: number | null;
+  usage_limit?: number;
+  starts_at?: string;
+  expires_at?: string;
+  is_active?: boolean;
+}
+
+// Sprint 5b — Reviews.
+export interface ReviewItem {
+  id: string;
+  rating: number;
+  comment?: string;
+  user_name: string;
+  created_at: string;
+}
+export interface ReviewSummary {
+  count: number;
+  average: number;
+  distribution: Record<string, number>;
+}
+
+export interface VoucherValidateResponse {
+  code: string;
+  description?: string;
+  type: "percent" | "fixed";
+  value: number;
+  discount: number;
 }
 
 export interface EcomCategoryPayload {
@@ -207,6 +335,7 @@ export interface EcomProductListItem {
 
 export interface EcomProductDetail extends EcomProductListItem {
   description?: string;
+  images?: string[]; // gallery URLs untuk swipe
   tiers?: { min_qty: number; price: number; note?: string }[];
 }
 
@@ -234,6 +363,10 @@ export const publicApi = {
     return request<EcomProductListResponse>("GET", `/ecom/products${qs ? "?" + qs : ""}`);
   },
   getProduct: (id: string) => request<EcomProductDetail>("GET", `/ecom/products/${id}`),
+  listReviews: (productId: string, limit = 20) =>
+    request<{ items: ReviewItem[]; summary: ReviewSummary }>(
+      "GET", `/ecom/products/${productId}/reviews?limit=${limit}`
+    ),
 };
 
 export function formatRp(n: number | null | undefined): string {
@@ -349,8 +482,12 @@ export interface CheckoutResponse {
 }
 
 export const checkoutApi = {
-  getShippingRates: (addressId: string) =>
-    request<ShippingRatesResponse>("POST", "/ecom/shipping/rates", { address_id: addressId }, "customer"),
+  getShippingRates: (addressId: string, opts?: { selected_item_ids?: string[]; buy_now_items?: { product_id: string; quantity: number }[] }) =>
+    request<ShippingRatesResponse>("POST", "/ecom/shipping/rates", {
+      address_id: addressId,
+      selected_item_ids: opts?.selected_item_ids,
+      buy_now_items: opts?.buy_now_items,
+    }, "customer"),
   createOrder: (data: {
     address_id: string;
     shipping_courier: string;
@@ -358,7 +495,12 @@ export const checkoutApi = {
     shipping_cost: number;
     shipping_etd: string;
     notes?: string;
+    voucher_code?: string;
+    selected_item_ids?: string[];
+    buy_now_items?: { product_id: string; quantity: number }[];
   }) => request<CheckoutResponse>("POST", "/ecom/checkout/create-order", data, "customer"),
+  validateVoucher: (code: string) =>
+    request<VoucherValidateResponse>("POST", "/ecom/checkout/validate-voucher", { code }, "customer"),
 };
 
 // ─── Customer Orders API (Fase 3e) ──────────────────────────────────
@@ -392,6 +534,7 @@ export interface CustomerOrderDetail {
     service_name: string;
     etd: string;
     awb?: string;
+    biteship_order_id?: string;
     address: {
       label: string;
       recipient_name: string;

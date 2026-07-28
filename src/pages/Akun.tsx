@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MapPin, Receipt, LogOut, ChevronRight, User } from "lucide-react";
+import { MapPin, Receipt, LogOut, ChevronRight, User, UserCog, Heart } from "lucide-react";
 import { decodeToken, setToken } from "@/lib/api";
 
 export function Akun() {
@@ -8,8 +8,10 @@ export function Akun() {
   const fullname = claims?.fullname || "Customer";
 
   const menu = [
-    { to: "/akun/alamat", icon: MapPin, label: "Alamat Pengiriman", desc: "Kelola alamat kirim" },
-    { to: "/pesanan", icon: Receipt, label: "Pesanan Saya", desc: "Riwayat + status order" },
+    { to: "/akun/profil", icon: UserCog, label: "Profil & Password", desc: "Ubah nama, HP, password" },
+    { to: "/akun/alamat", icon: MapPin,  label: "Alamat Pengiriman", desc: "Kelola alamat kirim" },
+    { to: "/pesanan",     icon: Receipt, label: "Pesanan Saya",      desc: "Riwayat & Status Order" },
+    { to: "/wishlist",    icon: Heart,   label: "Wishlist",           desc: "Produk favorit untuk dibeli nanti" },
   ];
 
   return (
