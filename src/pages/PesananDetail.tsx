@@ -262,7 +262,7 @@ export function PesananDetail() {
             <div className="flex-1">
               <p className="text-sm font-black text-ink-900">Pesanan Selesai</p>
               <p className="text-xs text-ink-700 mt-1">
-                Terima kasih sudah belanja di Toko Bahan Kue Santi 🌟 Jangan
+                Terima kasih sudah belanja di Toko Bahan Kue Santi. Jangan
                 lupa tulis ulasan untuk produk yang kamu beli.
               </p>
             </div>
@@ -634,7 +634,7 @@ function ReviewComposerModal({
     );
     setSubmitting(false);
     if (okCount > 0) {
-      toast.success(`Terima kasih! ${okCount} ulasan terkirim 🌟`);
+      toast.success(`Terima kasih! ${okCount} ulasan terkirim`);
     }
     if (errCount > 0) {
       toast.error(`${errCount} ulasan gagal terkirim`);
@@ -654,42 +654,52 @@ function ReviewComposerModal({
         onClick={() => !submitting && onClose()}
       />
 
-      {/* Bottom sheet on mobile, centered card on desktop. Max height 90vh
-          + scroll body untuk multi-item. */}
-      <div className="relative bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col modal-sheet-in">
-        {/* Header sticky */}
-        <div className="px-5 sm:px-6 pt-5 pb-3 border-b border-cherry-100 flex items-start gap-3 shrink-0">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shrink-0 shadow-md">
-            <Sparkles size={22} className="text-white" aria-hidden="true" />
+      {/* Bottom sheet mobile, centered card desktop. Max 90vh + scroll body
+          untuk multi-item. Pattern hero cover atas (soft) + body list +
+          footer CTA — mirip Tokopedia "Beri Ulasan". */}
+      <div className="relative bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col modal-sheet-in overflow-hidden">
+        {/* Close X floating */}
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          aria-label="Tutup"
+          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-ink-500 bg-white/70 backdrop-blur hover:bg-white disabled:opacity-40"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+
+        {/* Hero cover — soft cream gradient dengan star illustration.
+            Sengaja soft supaya tidak kompetisi dengan star input di body. */}
+        <div className="bg-gradient-to-b from-amber-50 to-white pt-7 pb-4 text-center shrink-0">
+          <div className="relative inline-block mb-3">
+            <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-lg shadow-amber-400/20">
+              <Star size={40} className="text-amber-400 fill-amber-400" strokeWidth={1.5} aria-hidden="true" />
+            </div>
+            <Sparkles size={14} className="absolute -top-1 -right-1 text-amber-500 fill-amber-500" aria-hidden="true" />
+            <Sparkles size={10} className="absolute -bottom-1 -left-2 text-amber-500 fill-amber-500" aria-hidden="true" />
           </div>
-          <div className="flex-1 min-w-0">
-            <h2 id="review-title" className="text-base font-black text-ink-900">
-              Yuk kasih ulasan 🌟
-            </h2>
-            <p className="text-xs text-ink-500 leading-relaxed mt-0.5">
-              Bantu customer lain dengan pengalamanmu.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            aria-label="Tutup"
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-ink-500 hover:bg-cherry-50 shrink-0 disabled:opacity-40"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
+          <h2 id="review-title" className="text-xl font-black text-ink-900 mb-1 px-6">
+            Bagaimana pengalamanmu?
+          </h2>
+          <p className="text-sm text-ink-500 leading-relaxed px-6 max-w-sm mx-auto">
+            Ulasanmu bantu customer lain memilih dengan yakin.
+          </p>
         </div>
 
-        {/* Items list — scrollable */}
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4">
-          {reviewableItems.map((it) => {
+        {/* Items list — scrollable, tanpa border card, pakai divider tipis
+            supaya lebih clean & focus ke bintang. */}
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-2">
+          {reviewableItems.map((it, idx) => {
             const draft = drafts[it.product_id] || { rating: 0, comment: "" };
             return (
-              <div key={it.product_id} className="border border-cherry-100 rounded-2xl p-4 bg-cherry-50/40">
+              <div
+                key={it.product_id}
+                className={`py-4 ${idx > 0 ? "border-t border-cherry-100" : ""}`}
+              >
                 {/* Product row */}
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-lg bg-white border border-cherry-100 shrink-0 overflow-hidden flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-xl bg-cherry-50 border border-cherry-100 shrink-0 overflow-hidden flex items-center justify-center">
                     {it.image ? (
                       // eslint-disable-next-line jsx-a11y/alt-text
                       <img src={it.image} alt="" className="w-full h-full object-cover" />
@@ -697,41 +707,46 @@ function ReviewComposerModal({
                       <Package size={18} className="text-cherry-300" aria-hidden="true" />
                     )}
                   </div>
-                  <p className="flex-1 min-w-0 text-sm font-bold text-ink-900 truncate">{it.name}</p>
+                  <p className="flex-1 min-w-0 text-sm font-bold text-ink-900 line-clamp-2">{it.name}</p>
                 </div>
 
-                {/* Star rating — touch target 44px per star */}
-                <div className="flex items-center gap-1 mb-3">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setRating(it.product_id, n)}
-                      disabled={submitting}
-                      aria-label={`${n} bintang`}
-                      aria-pressed={draft.rating >= n}
-                      className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
-                    >
-                      <Star
-                        size={24}
-                        className={
-                          draft.rating >= n
-                            ? "fill-amber-400 text-amber-400"
-                            : "fill-transparent text-cherry-200"
-                        }
-                        aria-hidden="true"
-                      />
-                    </button>
-                  ))}
-                  {draft.rating > 0 && (
-                    <span className="ml-2 text-xs font-bold text-ink-700">
-                      {draft.rating === 5 ? "Sempurna!" : draft.rating === 4 ? "Bagus" : draft.rating === 3 ? "Cukup" : draft.rating === 2 ? "Kurang" : "Buruk"}
-                    </span>
-                  )}
+                {/* Star rating — centered, larger stars, label di bawah */}
+                <div className="flex flex-col items-center gap-1 mb-3">
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setRating(it.product_id, n)}
+                        disabled={submitting}
+                        aria-label={`${n} bintang`}
+                        aria-pressed={draft.rating >= n}
+                        className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
+                      >
+                        <Star
+                          size={28}
+                          strokeWidth={1.5}
+                          className={
+                            draft.rating >= n
+                              ? "fill-amber-400 text-amber-400"
+                              : "fill-transparent text-cherry-200"
+                          }
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <span className={`text-xs font-bold h-4 ${draft.rating > 0 ? "text-amber-600" : "text-ink-500"}`}>
+                    {draft.rating === 5 ? "Sempurna" :
+                     draft.rating === 4 ? "Bagus" :
+                     draft.rating === 3 ? "Cukup" :
+                     draft.rating === 2 ? "Kurang" :
+                     draft.rating === 1 ? "Buruk" :
+                     "Ketuk bintang untuk beri rating"}
+                  </span>
                 </div>
 
-                {/* Comment — muncul kalau sudah pilih bintang, cegah UI ramai
-                    kalau customer skip item. */}
+                {/* Comment — muncul progressive setelah pilih bintang */}
                 {draft.rating > 0 && (
                   <textarea
                     value={draft.comment}
@@ -740,7 +755,7 @@ function ReviewComposerModal({
                     placeholder="Ceritakan pengalamanmu (opsional)"
                     rows={2}
                     maxLength={500}
-                    className="w-full px-3 py-2 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30 resize-y"
+                    className="w-full px-3 py-2.5 rounded-xl border border-cherry-200 text-sm bg-cherry-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400 resize-none transition-colors"
                   />
                 )}
               </div>
@@ -748,33 +763,33 @@ function ReviewComposerModal({
           })}
         </div>
 
-        {/* Footer sticky */}
-        <div className="px-5 sm:px-6 py-4 border-t border-cherry-100 flex flex-col sm:flex-row gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="flex-1 h-12 rounded-xl border-2 border-cherry-200 text-sm font-black text-ink-700 hover:bg-cherry-50 disabled:opacity-40"
-          >
-            Nanti Saja
-          </button>
+        {/* Footer — primary full-width + text-link secondary. Sama pola
+            dengan ConfirmReceivedModal, konsisten across page. */}
+        <div className="px-5 sm:px-6 pt-3 pb-4 border-t border-cherry-100 shrink-0 bg-white">
           <button
             type="button"
             onClick={submitAll}
             disabled={submitting || rated.length === 0}
-            className="flex-1 h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-md active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-lg shadow-cherry-500/20 active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {submitting ? (
               <>
                 <Clock size={14} className="animate-spin" aria-hidden="true" />
                 Mengirim…
               </>
+            ) : rated.length === 0 ? (
+              "Kirim Ulasan"
             ) : (
-              <>
-                <Sparkles size={14} aria-hidden="true" />
-                Kirim {rated.length > 0 ? `(${rated.length})` : ""}
-              </>
+              `Kirim ${rated.length} Ulasan`
             )}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="w-full mt-2 h-11 rounded-xl text-sm font-bold text-ink-500 hover:text-ink-700 hover:bg-cherry-50/50 disabled:opacity-40"
+          >
+            Nanti Saja
           </button>
         </div>
       </div>
