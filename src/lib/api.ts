@@ -507,8 +507,7 @@ export interface PGChannelGroup {
 
 // PG_BASE_URL — override via VITE_PG_BASE_URL kalau nanti pindah ke prod.
 // Default ke sandbox URL yang dipakai sekarang.
-const PG_BASE_URL = ((import.meta as unknown) as { env?: Record<string, string> }).env?.VITE_PG_BASE_URL
-  || "https://api-pgsanbox.alifworks.net";
+const PG_BASE_URL = import.meta.env.VITE_PG_BASE_URL || "https://api-pgsanbox.alifworks.net";
 
 export const pgChannelsApi = {
   list: async (): Promise<PGChannelGroup[]> => {

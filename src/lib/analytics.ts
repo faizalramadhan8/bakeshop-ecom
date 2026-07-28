@@ -49,7 +49,7 @@ export function initAnalytics() {
   if (META_PIXEL_ID) {
     // Meta Pixel — snippet resmi Meta (fbq init + PageView).
     /* eslint-disable */
-    !(function (f: any, b: any, e: any, v: any) {
+    (function (f: any, b: any, e: any, v: any) {
       if (f.fbq) return;
       const n: any = (f.fbq = function () {
         n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
