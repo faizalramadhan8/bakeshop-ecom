@@ -169,7 +169,7 @@ export function Checkout() {
       return ctx.buy_now_items.reduce((sum, bn) => {
         const p = buyNowProducts.find((x) => x.id === bn.product_id);
         if (!p) return sum;
-        const price = p.ecom_price ?? p.selling_price;
+        const price = p.price;
         return sum + price * bn.quantity;
       }, 0);
     }
@@ -645,13 +645,13 @@ export function Checkout() {
           <ul className="mb-3 space-y-2 border-b border-cherry-100 pb-3">
             {ctx.buy_now_items.map((bn) => {
               const p = buyNowProducts.find((x) => x.id === bn.product_id);
-              const price = p ? (p.ecom_price ?? p.selling_price) : 0;
+              const price = p ? p.price : 0;
               return (
                 <li key={bn.product_id} className="flex items-start gap-3">
                   <div className="w-12 h-12 rounded-lg bg-cherry-50 border border-cherry-100 shrink-0 overflow-hidden flex items-center justify-center">
-                    {p?.ecom_image ? (
+                    {p?.image ? (
                       // eslint-disable-next-line jsx-a11y/alt-text
-                      <img src={p.ecom_image} alt="" className="w-full h-full object-cover" />
+                      <img src={p.image} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <Package size={18} className="text-cherry-300" aria-hidden="true" />
                     )}
