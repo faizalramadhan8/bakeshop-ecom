@@ -11,7 +11,6 @@ import {
   type PGChannel, type PGChannelGroup, type PGChannelCategory,
   type EcomProductDetail,
 } from "@/lib/api";
-import { CourierLogo } from "@/components/CourierLogo";
 import { useCart, refreshCart } from "@/lib/cartStore";
 import { trackEvent } from "@/lib/analytics";
 
@@ -124,6 +123,17 @@ export function Checkout() {
         const known = groups.filter((g) => CATEGORY_ORDER.includes(g.category));
         known.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
         setChannelGroups(known);
+        // Auto-pick default paling populer di Indonesia — QRIS dulu (universal,
+        // bisa scan dari app mana aja), fallback e-wallet (DANA/OVO/ShopeePay),
+        // fallback VA, terakhir kartu kredit. Customer bisa ubah via sheet.
+        const preferOrder: PGChannelCategory[] = ["qris", "e-wallet", "virtual-account", "credit-card"];
+        for (const cat of preferOrder) {
+          const g = known.find((x) => x.category === cat);
+          if (g && g.channels.length > 0) {
+            setSelectedChannel(g.channels[0]);
+            break;
+          }
+        }
       })
       .catch((err) => setChannelsError(err instanceof Error ? err.message : "Gagal memuat metode pembayaran"))
       .finally(() => setLoadingChannels(false));
@@ -449,7 +459,9 @@ export function Checkout() {
             ) : selectedRate ? (
               // Preview kurir terpilih — mirip Shopee list opsi
               <div className="flex items-center gap-3">
-                <CourierLogo courier={selectedRate.courier || selectedRate.courier_name} size={40} />
+                <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
+                  <Truck size={18} className="text-cherry-500" strokeWidth={1.5} aria-hidden="true" />
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="text-sm font-black text-ink-900 truncate">
@@ -811,7 +823,9 @@ function ShippingSheet({
                   className={`w-full flex items-center justify-between px-3 py-3 text-left ${selectedInCarrier ? "bg-cherry-50" : "hover:bg-cherry-50/50"}`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <CourierLogo courier={options[0].courier || carrier} size={40} />
+                    <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
+                      <Truck size={18} className="text-cherry-500" strokeWidth={1.5} aria-hidden="true" />
+                    </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-black text-ink-900 truncate">{carrier}</p>

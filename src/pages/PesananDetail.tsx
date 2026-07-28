@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { ordersApi, accountApi, formatRp, formatETD, type CustomerOrderDetail } from "@/lib/api";
-import { CourierLogo } from "@/components/CourierLogo";
 
 // Map courier name (case-insensitive substring) → tracking URL template.
 // Return null kalau kurir tidak dikenal — FE hide tombol lacak.
@@ -339,7 +338,9 @@ export function PesananDetail() {
           {order.shipping.address.province} {order.shipping.address.zipcode}
         </p>
         <div className="flex items-center gap-3 pt-3 border-t border-cherry-100">
-          <CourierLogo courier={order.shipping.courier} size={36} />
+          <div className="w-9 h-9 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
+            <Truck size={16} className="text-cherry-500" strokeWidth={1.5} aria-hidden="true" />
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-ink-900 truncate">
               {order.shipping.courier} · {order.shipping.service_name}
