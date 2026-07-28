@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft, Package, MapPin, Truck, CreditCard, Check, Clock, AlertCircle, Copy,
-  PackageCheck,
+  PackageCheck, Star, X, Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ordersApi, formatRp, type CustomerOrderDetail } from "@/lib/api";
+import { ordersApi, accountApi, formatRp, type CustomerOrderDetail } from "@/lib/api";
 
 // Map courier name (case-insensitive substring) → tracking URL template.
 // Return null kalau kurir tidak dikenal — FE hide tombol lacak.
@@ -68,6 +68,11 @@ export function PesananDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Modal states — marketplace-style: (1) confirmation modal, (2) review composer
+  // muncul otomatis setelah konfirmasi sukses supaya customer langsung kasih
+  // ulasan mumpung habis unboxing. Cegah "reminder review" via push nanti.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -79,18 +84,16 @@ export function PesananDetail() {
   };
   useEffect(load, [id]);
 
-  const handleConfirmReceived = async () => {
+  const submitConfirm = async () => {
     if (!id || confirming) return;
-    // Marketplace pattern — final action, tegaskan sekali sebelum kirim
-    // (cegah tap tidak sengaja saat scroll).
-    if (!window.confirm("Konfirmasi barang sudah diterima dengan baik? Setelah dikonfirmasi, pesanan ditandai selesai.")) {
-      return;
-    }
     setConfirming(true);
     try {
       const updated = await ordersApi.confirmReceived(id);
       setOrder(updated);
-      toast.success("Terima kasih! Pesanan selesai. Yuk tulis ulasan 🌟");
+      setConfirmOpen(false);
+      // Auto-open review composer — pattern Tokopedia/Shopee: kasih ulasan
+      // langsung setelah selesai, mumpung memori unboxing masih fresh.
+      setReviewOpen(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal konfirmasi");
     } finally {
@@ -202,7 +205,7 @@ export function PesananDetail() {
               </p>
               <button
                 type="button"
-                onClick={handleConfirmReceived}
+                onClick={() => setConfirmOpen(true)}
                 disabled={confirming}
                 className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-md active:scale-[0.98] transition-transform"
               >
@@ -403,6 +406,345 @@ export function PesananDetail() {
             Dibayar {formatDateFull(order.payment.paid_at)}
           </p>
         )}
+      </div>
+
+      {/* Modal konfirmasi terima — ganti native window.confirm dengan UI
+          on-brand + touch target 44px+ + escape via backdrop/X/Cancel. */}
+      {confirmOpen && (
+        <ConfirmReceivedModal
+          confirming={confirming}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={submitConfirm}
+        />
+      )}
+
+      {/* Modal review composer — auto-open setelah konfirmasi sukses. Per-item
+          rating 5 bintang + comment opsional. Multi-item = scrollable list.
+          Skip button "Nanti Saja" tanpa penalty. */}
+      {reviewOpen && (
+        <ReviewComposerModal
+          order={order}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── ConfirmReceivedModal ─────────────────────────────────────────────
+// Ganti native window.confirm() supaya UX on-brand + support keyboard
+// escape + backdrop click + loading state saat submit. Focus dikelola user
+// via Tab — no auto-focus trap untuk sekarang.
+
+function ConfirmReceivedModal({
+  confirming,
+  onCancel,
+  onConfirm,
+}: {
+  confirming: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !confirming) onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    // Cegah scroll background saat modal terbuka.
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [confirming, onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-fade-in"
+        onClick={() => !confirming && onCancel()}
+      />
+
+      {/* Card */}
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 modal-scale-in">
+        {/* Close X — cepat tap untuk close, touch target 44px */}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={confirming}
+          aria-label="Tutup"
+          className="absolute top-3 right-3 w-11 h-11 rounded-xl flex items-center justify-center text-ink-500 hover:bg-cherry-50 disabled:opacity-40"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+
+        {/* Icon hero */}
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cherry-400 to-cherry-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <PackageCheck size={28} className="text-white" aria-hidden="true" />
+        </div>
+
+        {/* Title + description */}
+        <h2 id="confirm-title" className="text-lg font-black text-ink-900 text-center mb-2">
+          Barang sudah diterima?
+        </h2>
+        <p className="text-sm text-ink-700 text-center leading-relaxed mb-6">
+          Cek dulu paketnya, pastikan barangnya sesuai dan tidak rusak.
+          Setelah kamu konfirmasi, pesanan langsung ditandai selesai.
+        </p>
+
+        {/* Actions — primary di kanan, sesuai konvensi mobile. Height 48px
+            (di atas 44 min tap target). */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={confirming}
+            className="flex-1 h-12 rounded-xl border-2 border-cherry-200 text-sm font-black text-ink-700 hover:bg-cherry-50 disabled:opacity-40"
+          >
+            Nanti Dulu
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={confirming}
+            className="flex-1 h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-md active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {confirming ? (
+              <>
+                <Clock size={14} className="animate-spin" aria-hidden="true" />
+                Memproses…
+              </>
+            ) : (
+              <>
+                <Check size={14} aria-hidden="true" />
+                Ya, Diterima
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ReviewComposerModal ──────────────────────────────────────────────
+// Auto-open setelah konfirmasi terima. Per-item rating 1-5 bintang + comment
+// opsional. Submit sekaligus semua item yang di-rating. Skip item tanpa
+// bintang. Best-effort — 1 review gagal tidak block sisanya, cegah customer
+// stuck kalau salah satu produk sudah pernah di-review sebelumnya.
+
+interface DraftReview {
+  rating: number;
+  comment: string;
+}
+
+function ReviewComposerModal({
+  order,
+  onClose,
+}: {
+  order: CustomerOrderDetail;
+  onClose: () => void;
+}) {
+  // Hanya item non-redeem (product_id valid) yang bisa di-review.
+  const reviewableItems = order.items.filter((it) => it.product_id);
+  const [drafts, setDrafts] = useState<Record<string, DraftReview>>(() =>
+    Object.fromEntries(reviewableItems.map((it) => [it.product_id, { rating: 0, comment: "" }]))
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [submitting, onClose]);
+
+  const setRating = (productId: string, rating: number) =>
+    setDrafts((prev) => ({ ...prev, [productId]: { ...prev[productId], rating } }));
+  const setComment = (productId: string, comment: string) =>
+    setDrafts((prev) => ({ ...prev, [productId]: { ...prev[productId], comment } }));
+
+  const rated = reviewableItems.filter((it) => drafts[it.product_id]?.rating > 0);
+
+  const submitAll = async () => {
+    if (rated.length === 0) {
+      toast.error("Pilih dulu bintang untuk minimal 1 produk");
+      return;
+    }
+    setSubmitting(true);
+    let okCount = 0;
+    let errCount = 0;
+    await Promise.all(
+      rated.map(async (it) => {
+        const d = drafts[it.product_id];
+        try {
+          await accountApi.submitReview({
+            product_id: it.product_id,
+            rating: d.rating,
+            comment: d.comment.trim() || undefined,
+          });
+          okCount++;
+        } catch {
+          errCount++;
+        }
+      })
+    );
+    setSubmitting(false);
+    if (okCount > 0) {
+      toast.success(`Terima kasih! ${okCount} ulasan terkirim 🌟`);
+    }
+    if (errCount > 0) {
+      toast.error(`${errCount} ulasan gagal terkirim`);
+    }
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-title"
+    >
+      <div
+        className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-fade-in"
+        onClick={() => !submitting && onClose()}
+      />
+
+      {/* Bottom sheet on mobile, centered card on desktop. Max height 90vh
+          + scroll body untuk multi-item. */}
+      <div className="relative bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col modal-sheet-in">
+        {/* Header sticky */}
+        <div className="px-5 sm:px-6 pt-5 pb-3 border-b border-cherry-100 flex items-start gap-3 shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shrink-0 shadow-md">
+            <Sparkles size={22} className="text-white" aria-hidden="true" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 id="review-title" className="text-base font-black text-ink-900">
+              Yuk kasih ulasan 🌟
+            </h2>
+            <p className="text-xs text-ink-500 leading-relaxed mt-0.5">
+              Bantu customer lain dengan pengalamanmu.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            aria-label="Tutup"
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-ink-500 hover:bg-cherry-50 shrink-0 disabled:opacity-40"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* Items list — scrollable */}
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4">
+          {reviewableItems.map((it) => {
+            const draft = drafts[it.product_id] || { rating: 0, comment: "" };
+            return (
+              <div key={it.product_id} className="border border-cherry-100 rounded-2xl p-4 bg-cherry-50/40">
+                {/* Product row */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-lg bg-white border border-cherry-100 shrink-0 overflow-hidden flex items-center justify-center">
+                    {it.image ? (
+                      // eslint-disable-next-line jsx-a11y/alt-text
+                      <img src={it.image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Package size={18} className="text-cherry-300" aria-hidden="true" />
+                    )}
+                  </div>
+                  <p className="flex-1 min-w-0 text-sm font-bold text-ink-900 truncate">{it.name}</p>
+                </div>
+
+                {/* Star rating — touch target 44px per star */}
+                <div className="flex items-center gap-1 mb-3">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setRating(it.product_id, n)}
+                      disabled={submitting}
+                      aria-label={`${n} bintang`}
+                      aria-pressed={draft.rating >= n}
+                      className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
+                    >
+                      <Star
+                        size={24}
+                        className={
+                          draft.rating >= n
+                            ? "fill-amber-400 text-amber-400"
+                            : "fill-transparent text-cherry-200"
+                        }
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ))}
+                  {draft.rating > 0 && (
+                    <span className="ml-2 text-xs font-bold text-ink-700">
+                      {draft.rating === 5 ? "Sempurna!" : draft.rating === 4 ? "Bagus" : draft.rating === 3 ? "Cukup" : draft.rating === 2 ? "Kurang" : "Buruk"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Comment — muncul kalau sudah pilih bintang, cegah UI ramai
+                    kalau customer skip item. */}
+                {draft.rating > 0 && (
+                  <textarea
+                    value={draft.comment}
+                    onChange={(e) => setComment(it.product_id, e.target.value)}
+                    disabled={submitting}
+                    placeholder="Ceritakan pengalamanmu (opsional)"
+                    rows={2}
+                    maxLength={500}
+                    className="w-full px-3 py-2 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30 resize-y"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer sticky */}
+        <div className="px-5 sm:px-6 py-4 border-t border-cherry-100 flex flex-col sm:flex-row gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 h-12 rounded-xl border-2 border-cherry-200 text-sm font-black text-ink-700 hover:bg-cherry-50 disabled:opacity-40"
+          >
+            Nanti Saja
+          </button>
+          <button
+            type="button"
+            onClick={submitAll}
+            disabled={submitting || rated.length === 0}
+            className="flex-1 h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-md active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {submitting ? (
+              <>
+                <Clock size={14} className="animate-spin" aria-hidden="true" />
+                Mengirim…
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} aria-hidden="true" />
+                Kirim {rated.length > 0 ? `(${rated.length})` : ""}
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
