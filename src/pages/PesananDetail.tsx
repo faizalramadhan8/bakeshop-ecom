@@ -493,49 +493,49 @@ function ConfirmReceivedModal({
         onClick={() => !confirming && onCancel()}
       />
 
-      {/* Card */}
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 modal-scale-in">
-        {/* Close X — cepat tap untuk close, touch target 44px */}
+      {/* Card — cleaner: soft cream cover di atas untuk illustration, konten
+          di bawah dengan generous whitespace + tombol full-width bertingkat
+          (primary CTA + text-link cancel), pola Tokopedia "Terima Barang". */}
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden modal-scale-in">
+        {/* Close X — floating di corner atas */}
         <button
           type="button"
           onClick={onCancel}
           disabled={confirming}
           aria-label="Tutup"
-          className="absolute top-3 right-3 w-11 h-11 rounded-xl flex items-center justify-center text-ink-500 hover:bg-cherry-50 disabled:opacity-40"
+          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-ink-500 bg-white/70 backdrop-blur hover:bg-white disabled:opacity-40"
         >
           <X size={16} aria-hidden="true" />
         </button>
 
-        {/* Icon hero */}
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cherry-400 to-cherry-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
-          <PackageCheck size={28} className="text-white" aria-hidden="true" />
+        {/* Illustration cover — cream bg dengan icon besar yang lebih breathable.
+            Ganti gradient hard-square dengan lingkaran soft. */}
+        <div className="bg-gradient-to-b from-cherry-50 to-white pt-8 pb-4 flex items-center justify-center">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg shadow-cherry-500/10">
+              <PackageCheck size={44} className="text-cherry-500" strokeWidth={1.5} aria-hidden="true" />
+            </div>
+            {/* Decorative sparkle accents */}
+            <Sparkles size={14} className="absolute -top-1 -right-1 text-amber-400 fill-amber-400" aria-hidden="true" />
+            <Sparkles size={10} className="absolute -bottom-1 -left-2 text-amber-400 fill-amber-400" aria-hidden="true" />
+          </div>
         </div>
 
-        {/* Title + description */}
-        <h2 id="confirm-title" className="text-lg font-black text-ink-900 text-center mb-2">
-          Barang sudah diterima?
-        </h2>
-        <p className="text-sm text-ink-700 text-center leading-relaxed mb-6">
-          Cek dulu paketnya, pastikan barangnya sesuai dan tidak rusak.
-          Setelah kamu konfirmasi, pesanan langsung ditandai selesai.
-        </p>
+        {/* Content */}
+        <div className="px-6 pt-2 pb-6 text-center">
+          <h2 id="confirm-title" className="text-xl font-black text-ink-900 mb-2">
+            Barang sudah sampai?
+          </h2>
+          <p className="text-sm text-ink-500 leading-relaxed mb-6 max-w-xs mx-auto">
+            Cek dulu paketmu. Kalau semua sesuai, konfirmasi supaya pesananmu selesai.
+          </p>
 
-        {/* Actions — primary di kanan, sesuai konvensi mobile. Height 48px
-            (di atas 44 min tap target). */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={confirming}
-            className="flex-1 h-12 rounded-xl border-2 border-cherry-200 text-sm font-black text-ink-700 hover:bg-cherry-50 disabled:opacity-40"
-          >
-            Nanti Dulu
-          </button>
+          {/* Primary CTA — full-width, gradient, subtle shadow */}
           <button
             type="button"
             onClick={onConfirm}
             disabled={confirming}
-            className="flex-1 h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-md active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-lg shadow-cherry-500/20 active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {confirming ? (
               <>
@@ -544,10 +544,20 @@ function ConfirmReceivedModal({
               </>
             ) : (
               <>
-                <Check size={14} aria-hidden="true" />
-                Ya, Diterima
+                <Check size={16} strokeWidth={3} aria-hidden="true" />
+                Ya, Barang Diterima
               </>
             )}
+          </button>
+
+          {/* Secondary — text link, no border, ringan */}
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={confirming}
+            className="w-full mt-2 h-11 rounded-xl text-sm font-bold text-ink-500 hover:text-ink-700 hover:bg-cherry-50/50 disabled:opacity-40"
+          >
+            Nanti Dulu
           </button>
         </div>
       </div>
