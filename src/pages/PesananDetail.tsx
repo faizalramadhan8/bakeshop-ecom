@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft, Package, MapPin, Truck, CreditCard, Check, Clock, AlertCircle, Copy,
-  PackageCheck, Star, X, Sparkles,
+  PackageCheck, Star, X, Sparkles, Wallet, Receipt,
+  type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { ordersApi, accountApi, formatRp, formatETD, type CustomerOrderDetail } from "@/lib/api";
@@ -41,6 +42,20 @@ const STATUS_STEP_LABEL: Record<string, string> = {
   shipped: "Dikirim",
   delivered: "Sampai",
   completed: "Selesai",
+};
+
+// Icon per step — pattern Tokopedia/Shopee. Bayar=Wallet, Dibayar=Receipt
+// (bukti bayar), Diproses=Package (dus di-pack), Dikirim=Truck, Sampai=
+// PackageCheck (barang tiba), Selesai=Sparkles (celebratory).
+// Passed step tetap tampil icon-nya (bukan Check universal) — lebih clear
+// jejak progress-nya.
+const STATUS_STEP_ICON: Record<string, LucideIcon> = {
+  pending_payment: Wallet,
+  paid: Receipt,
+  processing: Package,
+  shipped: Truck,
+  delivered: PackageCheck,
+  completed: Sparkles,
 };
 
 function formatDateFull(iso?: string): string {
@@ -158,21 +173,26 @@ export function PesananDetail() {
         ) : (
           <div className="flex items-center gap-1">
             {STATUS_STEPS.map((s, i) => {
-              const passed = i <= currentStepIdx;
+              const passed = i < currentStepIdx;
               const current = i === currentStepIdx;
+              const StepIcon = STATUS_STEP_ICON[s] || Package;
               return (
                 <div key={s} className="flex-1 flex flex-col items-center gap-1">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                      passed
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                      current
+                        ? "bg-cherry-500 text-white shadow-md shadow-cherry-500/30 ring-4 ring-cherry-100"
+                        : passed
                         ? "bg-cherry-500 text-white"
-                        : "bg-cherry-100 text-ink-500"
+                        : "bg-cherry-50 text-cherry-300"
                     }`}
+                    aria-label={STATUS_STEP_LABEL[s]}
+                    aria-current={current ? "step" : undefined}
                   >
-                    {passed ? <Check size={14} /> : i + 1}
+                    <StepIcon size={16} strokeWidth={2} aria-hidden="true" />
                   </div>
                   <p className={`text-[10px] sm:text-xs text-center leading-tight ${
-                    current ? "font-black text-cherry-500" : "text-ink-500"
+                    current ? "font-black text-cherry-500" : passed ? "text-ink-700" : "text-ink-500"
                   }`}>
                     {STATUS_STEP_LABEL[s]}
                   </p>
