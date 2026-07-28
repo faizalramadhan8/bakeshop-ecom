@@ -126,6 +126,12 @@ export const adminApi = {
     request<CustomerOrderDetail>("POST", `/ecom/admin/orders/${id}/shipping`, data, "admin"),
   createBiteshipShipment: (id: string) =>
     request<CustomerOrderDetail>("POST", `/ecom/admin/orders/${id}/biteship-create`, undefined, "admin"),
+  // Sync status Biteship manual — fallback kalau webhook missed.
+  syncBiteshipStatus: (id: string) =>
+    request<CustomerOrderDetail>("POST", `/ecom/admin/orders/${id}/biteship-sync`, undefined, "admin"),
+  // Balance Biteship — untuk dashboard widget.
+  getBiteshipBalance: () =>
+    request<{ balance: number; currency: string }>("GET", "/ecom/admin/biteship/balance", undefined, "admin"),
 
   // Sprint 5 — Voucher CRUD.
   listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),
@@ -529,8 +535,12 @@ export const checkoutApi = {
     }, "customer"),
   createOrder: (data: {
     address_id: string;
+    // CODE Biteship (mis. "sicepat"/"reg") — dipakai BE untuk Create Order API
     shipping_courier: string;
     shipping_service: string;
+    // Display name (mis. "SiCepat"/"Reguler") — untuk render di UI
+    shipping_courier_name?: string;
+    shipping_service_name?: string;
     shipping_cost: number;
     shipping_etd: string;
     notes?: string;
@@ -578,6 +588,9 @@ export interface CustomerOrderDetail {
     service_name: string;
     etd: string;
     awb?: string;
+    // Public tracking link Biteship — customer klik "Lacak Paket" tanpa copy
+    // AWB ke web kurir manual. Include peta + history.
+    tracking_url?: string;
     biteship_order_id?: string;
     address: {
       label: string;

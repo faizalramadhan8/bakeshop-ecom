@@ -360,15 +360,18 @@ export function PesananDetail() {
                 <Copy size={12} aria-hidden="true" /> Salin
               </button>
             </div>
-            {trackingURL(order.shipping.courier, order.shipping.awb) && (
+            {/* Prefer Biteship public tracking link — sudah include peta +
+                history + auto-refresh, jauh lebih baik dari web kurir manual.
+                Fallback ke tracking URL per courier kalau Biteship link belum ada. */}
+            {(order.shipping.tracking_url || trackingURL(order.shipping.courier, order.shipping.awb)) && (
               <a
-                href={trackingURL(order.shipping.courier, order.shipping.awb)!}
+                href={order.shipping.tracking_url || trackingURL(order.shipping.courier, order.shipping.awb)!}
                 target="_blank"
                 rel="noopener"
                 className="inline-flex items-center gap-1.5 mt-1 px-3 py-2 rounded-lg text-xs font-bold text-cherry-500 border border-cherry-200 hover:bg-cherry-50"
               >
                 <Truck size={12} aria-hidden="true" />
-                Lacak di {order.shipping.courier}
+                Lacak Paket
               </a>
             )}
           </div>

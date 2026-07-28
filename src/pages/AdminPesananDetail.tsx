@@ -99,6 +99,7 @@ export function AdminPesananDetail() {
   const [showResiForm, setShowResiForm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showBiteshipConfirm, setShowBiteshipConfirm] = useState(false);
+  const [syncingBiteship, setSyncingBiteship] = useState(false);
   const [awb, setAwb] = useState("");
   const [courierOverride, setCourierOverride] = useState("");
   const [saving, setSaving] = useState(false);
@@ -178,6 +179,20 @@ export function AdminPesananDetail() {
       toast.error(err instanceof Error ? err.message : "Gagal buat order Biteship");
     } finally {
       setCreatingBiteship(false);
+    }
+  };
+
+  const syncBiteship = async () => {
+    if (!order || syncingBiteship) return;
+    setSyncingBiteship(true);
+    try {
+      const updated = await adminApi.syncBiteshipStatus(order.id);
+      setOrder(updated);
+      toast.success("Status Biteship di-sync");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal sync Biteship");
+    } finally {
+      setSyncingBiteship(false);
     }
   };
 
@@ -408,6 +423,32 @@ export function AdminPesananDetail() {
                     Menunggu nomor resi dari kurir…
                   </p>
                 )}
+                {order.shipping.tracking_url && (
+                  <a
+                    href={order.shipping.tracking_url}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-emerald-700 underline hover:text-emerald-800"
+                  >
+                    <Truck size={12} aria-hidden="true" />
+                    Buka Tracking Biteship
+                  </a>
+                )}
+                {/* Sync manual — fallback kalau webhook missed. Aman di-klik
+                    berkali-kali; endpoint idempotent. */}
+                <button
+                  type="button"
+                  onClick={syncBiteship}
+                  disabled={syncingBiteship}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 disabled:opacity-50"
+                >
+                  {syncingBiteship ? (
+                    <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Undo size={12} aria-hidden="true" />
+                  )}
+                  Sync Status dari Biteship
+                </button>
               </div>
             </div>
           )}

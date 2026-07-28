@@ -266,8 +266,12 @@ export function Checkout() {
     try {
       const resp = await checkoutApi.createOrder({
         address_id: selectedAddress.id,
-        shipping_courier: selectedRate.courier_name,
-        shipping_service: selectedRate.service_name,
+        // Kirim CODE (bukan display name) — BE pakai untuk call Biteship
+        // /v1/orders. Display name di *_name untuk render UI.
+        shipping_courier: selectedRate.courier,
+        shipping_courier_name: selectedRate.courier_name,
+        shipping_service: selectedRate.service,
+        shipping_service_name: selectedRate.service_name,
         shipping_cost: selectedRate.cost,
         shipping_etd: selectedRate.etd,
         voucher_code: appliedVoucher?.code,
