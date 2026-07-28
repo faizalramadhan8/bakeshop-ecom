@@ -6,8 +6,9 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
-  addressApi, checkoutApi, formatRp,
+  addressApi, checkoutApi, formatRp, pgChannelsApi,
   type Address, type ShippingRate, type ShippingRatesResponse,
+  type PGChannel, type PGChannelGroup, type PGChannelCategory,
 } from "@/lib/api";
 import { useCart, refreshCart } from "@/lib/cartStore";
 import { trackEvent } from "@/lib/analytics";
@@ -16,6 +17,19 @@ import { trackEvent } from "@/lib/analytics";
 type CheckoutContext =
   | { mode: "cart"; selected_item_ids?: string[] }
   | { mode: "buy_now"; buy_now_items: { product_id: string; quantity: number }[] };
+
+// Label Indonesia untuk PG category header — biar Bu Santi ngerti (bukan
+// "virtual-account" yang tehnis).
+const CATEGORY_LABEL: Record<PGChannelCategory, string> = {
+  "virtual-account": "Virtual Account (Transfer Bank)",
+  "qris": "QRIS",
+  "e-wallet": "E-Wallet",
+  "credit-card": "Kartu Kredit",
+};
+
+// Ordering — VA di atas (paling common Indonesia), QRIS + e-wallet next
+// (skala Bu Santi customer digital-native), credit card terakhir (rare).
+const CATEGORY_ORDER: PGChannelCategory[] = ["virtual-account", "qris", "e-wallet", "credit-card"];
 
 // Grouped shipping rates by carrier — untuk UX dropdown.
 // Kalau ada JNE Reguler + JNE YES, jadi 1 grup JNE dengan 2 sub-option.
@@ -70,6 +84,34 @@ export function Checkout() {
   const [voucherInput, setVoucherInput] = useState("");
   const [applyingVoucher, setApplyingVoucher] = useState(false);
   const [appliedVoucher, setAppliedVoucher] = useState<{ code: string; discount: number; description?: string } | null>(null);
+
+  // PG channels — di-fetch langsung dari alifworks (public endpoint). Grup
+  // by category (VA / QRIS / e-wallet / kartu kredit) sesuai preferensi
+  // Bu Santi. Loading state di-tampilkan di section pembayaran; kalau fetch
+  // gagal, section jadi disabled + tampil retry.
+  const [channelGroups, setChannelGroups] = useState<PGChannelGroup[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<PGChannel | null>(null);
+
+  const loadChannels = () => {
+    setLoadingChannels(true);
+    setChannelsError(null);
+    pgChannelsApi.list()
+      .then((groups) => {
+        // Sort groups sesuai CATEGORY_ORDER, filter category yang tidak
+        // dikenal (defensive kalau PG tambah kategori baru).
+        const known = groups.filter((g) => CATEGORY_ORDER.includes(g.category));
+        known.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
+        setChannelGroups(known);
+      })
+      .catch((err) => setChannelsError(err instanceof Error ? err.message : "Gagal memuat metode pembayaran"))
+      .finally(() => setLoadingChannels(false));
+  };
+
+  useEffect(() => {
+    loadChannels();
+  }, []);
 
   useEffect(() => {
     if (!isBuyNow) refreshCart();
@@ -197,6 +239,10 @@ export function Checkout() {
       toast.error("Pilih metode pengiriman");
       return;
     }
+    if (!selectedChannel) {
+      toast.error("Pilih metode pembayaran");
+      return;
+    }
     setPlacing(true);
     try {
       const resp = await checkoutApi.createOrder({
@@ -206,6 +252,8 @@ export function Checkout() {
         shipping_cost: selectedRate.cost,
         shipping_etd: selectedRate.etd,
         voucher_code: appliedVoucher?.code,
+        payment_channel: selectedChannel.payment_code,
+        payment_channel_category: selectedChannel.category,
         selected_item_ids: selectedIds,
         buy_now_items: ctx.mode === "buy_now" ? ctx.buy_now_items : undefined,
       });
@@ -218,11 +266,12 @@ export function Checkout() {
         value: resp.total,
         shipping: resp.shipping_cost,
       });
-      if (resp.payment_mode === "midtrans" && resp.snap_token && !resp.snap_token.startsWith("stub-")) {
-        if (resp.snap_redirect_url) {
-          window.location.href = resp.snap_redirect_url;
-          return;
-        }
+      // PG DOKU — redirect ke checkout link supaya customer bisa bayar VA/
+      // QRIS/e-wallet. Kalau stub / gagal PG, fallback ke pesanan detail
+      // dengan mode manual (Bu Santi verify bank transfer).
+      if (resp.payment_mode === "pg" && resp.payment_url && !resp.payment_url.startsWith("stub-")) {
+        window.location.href = resp.payment_url;
+        return;
       }
       toast.success("Order berhasil dibuat");
       navigate(`/pesanan/${resp.order_id}`);
@@ -434,13 +483,90 @@ export function Checkout() {
           <CreditCard size={16} className="text-cherry-500" aria-hidden="true" />
           <h2 className="text-sm font-black text-ink-900">Metode Pembayaran</h2>
         </div>
-        <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-cherry-50 border border-cherry-100">
-          <Wallet size={18} className="text-cherry-500" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-ink-900">Midtrans</p>
-            <p className="text-xs text-ink-500">Pilih VA / QRIS / e-wallet / kartu di halaman berikutnya</p>
+
+        {loadingChannels && (
+          <div className="flex items-center justify-center gap-2 py-6 text-ink-500 text-sm">
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            Memuat metode pembayaran…
           </div>
-        </div>
+        )}
+
+        {channelsError && !loadingChannels && (
+          <div className="bg-cherry-50 border border-cherry-200 rounded-xl p-3 text-sm">
+            <p className="text-cherry-600 font-bold mb-2">{channelsError}</p>
+            <button
+              type="button"
+              onClick={loadChannels}
+              className="text-xs font-bold text-cherry-500 underline hover:text-cherry-600"
+            >
+              Coba lagi
+            </button>
+          </div>
+        )}
+
+        {!loadingChannels && !channelsError && channelGroups.length > 0 && (
+          <div className="space-y-4">
+            {channelGroups.map((group) => (
+              <div key={group.category}>
+                <p className="text-xs font-black uppercase tracking-wider text-ink-500 mb-2">
+                  {CATEGORY_LABEL[group.category]}
+                </p>
+                <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
+                  {group.channels.map((ch) => {
+                    const active = selectedChannel?.id === ch.id;
+                    return (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => setSelectedChannel(ch)}
+                        aria-pressed={active}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-colors ${
+                          active
+                            ? "border-cherry-500 bg-cherry-50"
+                            : "border-cherry-100 bg-white hover:border-cherry-300"
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-white border border-cherry-100 flex items-center justify-center shrink-0 overflow-hidden">
+                          {ch.payment_logo ? (
+                            // eslint-disable-next-line jsx-a11y/alt-text
+                            <img
+                              src={ch.payment_logo}
+                              alt=""
+                              className="max-w-full max-h-full object-contain"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <Wallet size={16} className="text-cherry-500" aria-hidden="true" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-ink-900 truncate">{ch.payment_name}</p>
+                          {ch.total_admin_fee > 0 && (
+                            <p className="text-xs text-ink-500">Biaya admin {formatRp(ch.total_admin_fee)}</p>
+                          )}
+                        </div>
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                            active ? "border-cherry-500 bg-cherry-500" : "border-cherry-300 bg-white"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {active && <Check size={10} className="text-white" strokeWidth={3} />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loadingChannels && !channelsError && channelGroups.length === 0 && (
+          <p className="text-sm text-ink-500 py-4 text-center">
+            Tidak ada metode pembayaran tersedia saat ini.
+          </p>
+        )}
 
         {/* Voucher input */}
         <div className="mt-4 pt-4 border-t border-cherry-100">

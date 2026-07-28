@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft, Package, MapPin, Truck, CreditCard, Check, Clock, AlertCircle, Copy,
+  PackageCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { ordersApi, formatRp, type CustomerOrderDetail } from "@/lib/api";
@@ -20,15 +21,26 @@ function trackingURL(courier: string, awb: string): string | null {
   return null;
 }
 
-const STATUS_STEPS = ["pending_payment", "paid", "processing", "shipped", "completed"];
+const STATUS_STEPS = ["pending_payment", "paid", "processing", "shipped", "delivered", "completed"];
 const STATUS_LABEL: Record<string, string> = {
   pending_payment: "Menunggu Pembayaran",
   paid: "Sudah Dibayar",
   processing: "Diproses",
   shipped: "Dikirim",
+  delivered: "Sampai",
   completed: "Selesai",
   cancelled: "Dibatalkan",
   expired: "Kadaluarsa",
+};
+// Label ringkas untuk stepper 6-kolom di mobile — max 1 kata pendek supaya
+// tidak overflow / wrap ke 2 baris di iPhone SE (320px).
+const STATUS_STEP_LABEL: Record<string, string> = {
+  pending_payment: "Bayar",
+  paid: "Dibayar",
+  processing: "Diproses",
+  shipped: "Dikirim",
+  delivered: "Sampai",
+  completed: "Selesai",
 };
 
 function formatDateFull(iso?: string): string {
@@ -40,11 +52,22 @@ function formatDateFull(iso?: string): string {
   });
 }
 
+// Selisih hari (bulat ke bawah) antara now dan iso timestamp. Return 0 kalau
+// hari yang sama (baru saja tag delivered).
+function daysSince(iso?: string): number {
+  if (!iso) return 0;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 0;
+  const diffMs = Date.now() - then;
+  return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
+}
+
 export function PesananDetail() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<CustomerOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -55,6 +78,25 @@ export function PesananDetail() {
       .finally(() => setLoading(false));
   };
   useEffect(load, [id]);
+
+  const handleConfirmReceived = async () => {
+    if (!id || confirming) return;
+    // Marketplace pattern — final action, tegaskan sekali sebelum kirim
+    // (cegah tap tidak sengaja saat scroll).
+    if (!window.confirm("Konfirmasi barang sudah diterima dengan baik? Setelah dikonfirmasi, pesanan ditandai selesai.")) {
+      return;
+    }
+    setConfirming(true);
+    try {
+      const updated = await ordersApi.confirmReceived(id);
+      setOrder(updated);
+      toast.success("Terima kasih! Pesanan selesai. Yuk tulis ulasan 🌟");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal konfirmasi");
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   if (loading) return <div className="max-w-3xl mx-auto p-6 text-center text-ink-500">Memuat…</div>;
   if (error || !order) {
@@ -71,8 +113,14 @@ export function PesananDetail() {
 
   const isCancelled = order.ecom_status === "cancelled" || order.ecom_status === "expired";
   const currentStepIdx = STATUS_STEPS.indexOf(order.ecom_status);
-  const isPaid = ["paid", "processing", "shipped", "completed"].includes(order.ecom_status);
+  const isPaid = ["paid", "processing", "shipped", "delivered", "completed"].includes(order.ecom_status);
   const isPendingPayment = order.ecom_status === "pending_payment";
+  // Kurir sudah tandai sampai — customer boleh konfirmasi. Termasuk state
+  // `shipped` untuk kasus kurir Bu Santi tanpa Biteship webhook (Bu Santi
+  // set resi manual, customer terima duluan, admin belum sempat mark
+  // delivered). Cegah customer stuck menunggu status berubah.
+  const canConfirmReceive = order.ecom_status === "delivered" || order.ecom_status === "shipped";
+  const deliveredDaysAgo = daysSince(order.ecom_delivered_at);
 
   return (
     <div className="max-w-3xl mx-auto p-4">
@@ -120,10 +168,10 @@ export function PesananDetail() {
                   >
                     {passed ? <Check size={14} /> : i + 1}
                   </div>
-                  <p className={`text-xs text-center leading-tight ${
+                  <p className={`text-[10px] sm:text-xs text-center leading-tight ${
                     current ? "font-black text-cherry-500" : "text-ink-500"
                   }`}>
-                    {STATUS_LABEL[s].split(" ")[0]}
+                    {STATUS_STEP_LABEL[s]}
                   </p>
                 </div>
               );
@@ -131,6 +179,73 @@ export function PesananDetail() {
           </div>
         )}
       </div>
+
+      {/* Panel konfirmasi barang diterima — muncul saat status delivered
+          atau shipped (kalau resi manual, kurir sudah sampai tapi Biteship
+          webhook tidak fire). CTA utama halaman ini saat step 5. */}
+      {canConfirmReceive && (
+        <div className="bg-gradient-to-br from-cherry-50 to-white border border-cherry-200 rounded-2xl p-4 mb-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-cherry-500 flex items-center justify-center shrink-0">
+              <PackageCheck size={20} className="text-white" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-black text-ink-900">
+                Barang sudah sampai?
+              </p>
+              <p className="text-xs text-ink-700 leading-relaxed mt-1">
+                {order.ecom_status === "delivered"
+                  ? `Kurir sudah menandai pesanan sampai${
+                      deliveredDaysAgo > 0 ? ` ${deliveredDaysAgo} hari lalu` : " hari ini"
+                    }. Cek dulu barangnya, lalu konfirmasi supaya pesanan selesai.`
+                  : "Kalau kurir sudah kasih paketmu dan barangnya sesuai, klik tombol di bawah untuk tandai selesai."}
+              </p>
+              <button
+                type="button"
+                onClick={handleConfirmReceived}
+                disabled={confirming}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-md active:scale-[0.98] transition-transform"
+              >
+                {confirming ? (
+                  <>
+                    <Clock size={14} className="animate-spin" aria-hidden="true" />
+                    Memproses…
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} aria-hidden="true" />
+                    Ya, Barang Diterima
+                  </>
+                )}
+              </button>
+              {order.ecom_status === "delivered" && (
+                <p className="text-xs text-ink-500 mt-2 leading-snug">
+                  Kalau tidak konfirmasi dalam 7 hari, pesanan akan otomatis
+                  ditandai selesai.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Panel selesai — customer sudah konfirmasi (atau auto-complete). */}
+      {order.ecom_status === "completed" && (
+        <div className="bg-cherry-50 border border-cherry-200 rounded-2xl p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-cherry-500 flex items-center justify-center shrink-0">
+              <Check size={20} className="text-white" aria-hidden="true" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-black text-ink-900">Pesanan Selesai</p>
+              <p className="text-xs text-ink-700 mt-1">
+                Terima kasih sudah belanja di Toko Bahan Kue Santi 🌟 Jangan
+                lupa tulis ulasan untuk produk yang kamu beli.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Payment action untuk pending_payment */}
       {isPendingPayment && (
@@ -144,16 +259,23 @@ export function PesananDetail() {
                   Bayar sebelum {formatDateFull(order.payment.expired_at)}
                 </p>
               )}
-              {order.payment.mode === "midtrans" && order.payment.snap_redirect_url ? (
-                <a
-                  href={order.payment.snap_redirect_url}
-                  target="_blank"
-                  rel="noopener"
-                  className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
-                >
-                  <CreditCard size={14} aria-hidden="true" />
-                  Bayar Sekarang
-                </a>
+              {order.payment.mode === "pg" && order.payment.payment_url ? (
+                <div className="mt-3">
+                  {order.payment.channel && (
+                    <p className="text-xs text-ink-700 mb-2">
+                      Metode: <span className="font-bold uppercase">{order.payment.channel}</span>
+                    </p>
+                  )}
+                  <a
+                    href={order.payment.payment_url}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
+                  >
+                    <CreditCard size={14} aria-hidden="true" />
+                    Bayar Sekarang
+                  </a>
+                </div>
               ) : (
                 <div className="mt-2 text-xs text-ink-700 leading-relaxed">
                   <p className="mb-1">

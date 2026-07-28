@@ -36,9 +36,23 @@ function actionsForStatus(status: string): Array<{ next: string; label: string; 
         { next: "cancelled", label: "Batalkan", icon: Ban, kind: "danger" },
       ];
     case "shipped":
+      // Marketplace pattern (28 Jul 2026): normalnya Biteship webhook yang
+      // trigger delivered, tapi kalau kurir non-Biteship (resi manual) admin
+      // bisa tandai sampai manual → customer confirm sendiri di app.
+      // "Tandai Selesai" tetap ada sebagai override kalau customer complain
+      // sudah terima tapi lupa konfirmasi (edge case).
       return [
-        { next: "completed", label: "Tandai Selesai", icon: Check, kind: "primary" },
-        { next: "cancelled", label: "Batalkan",       icon: Ban,   kind: "danger" },
+        { next: "delivered", label: "Tandai Sampai Kurir", icon: PackageCheck, kind: "primary" },
+        { next: "completed", label: "Paksa Selesai",       icon: Check,        kind: "secondary" },
+        { next: "cancelled", label: "Batalkan",            icon: Ban,          kind: "danger" },
+      ];
+    case "delivered":
+      // Nunggu customer konfirmasi. Admin cuma boleh cancel (kalau ada
+      // dispute) atau paksa selesai (kalau customer complain di WA sudah
+      // terima tapi malas buka app).
+      return [
+        { next: "completed", label: "Paksa Selesai", icon: Check, kind: "primary" },
+        { next: "cancelled", label: "Batalkan",      icon: Ban,   kind: "danger" },
       ];
     case "pending_payment":
       return [
@@ -55,6 +69,7 @@ function statusColor(s: string): string {
     paid:            "bg-cherry-100 text-cherry-600",
     processing:      "bg-blue-100 text-blue-700",
     shipped:         "bg-purple-100 text-purple-700",
+    delivered:       "bg-teal-100 text-teal-700",
     completed:       "bg-emerald-100 text-emerald-700",
     cancelled:       "bg-red-100 text-red-700",
     expired:         "bg-ink-100 text-ink-700",
@@ -68,6 +83,7 @@ function statusLabel(s: string): string {
     paid:            "Perlu Diproses",
     processing:      "Sedang Diproses",
     shipped:         "Sudah Dikirim",
+    delivered:       "Sampai — Tunggu Konfirmasi Customer",
     completed:       "Selesai",
     cancelled:       "Dibatalkan",
     expired:         "Expired",
@@ -463,9 +479,15 @@ export function AdminPesananDetail() {
             <div className="flex justify-between">
               <dt className="text-ink-500">Metode</dt>
               <dd className="text-ink-900">
-                {order.payment.mode === "midtrans" ? "Midtrans" : "Transfer Manual"}
+                {order.payment.mode === "pg" ? "Payment Gateway" : "Transfer Manual"}
               </dd>
             </div>
+            {order.payment.channel && (
+              <div className="flex justify-between">
+                <dt className="text-ink-500">Kanal</dt>
+                <dd className="text-ink-900 uppercase">{order.payment.channel}</dd>
+              </div>
+            )}
             {order.payment.reference && (
               <div className="flex justify-between">
                 <dt className="text-ink-500">Referensi</dt>
@@ -516,7 +538,7 @@ export function AdminPesananDetail() {
             <p className="text-sm font-bold text-red-700 mb-1">Batalkan pesanan ini?</p>
             <p className="text-xs text-red-600 mb-3 leading-relaxed">
               Stok online akan otomatis dikembalikan ({order.items.length} produk).
-              Kalau customer sudah bayar, refund harus di-proses manual di dashboard Midtrans.
+              Kalau customer sudah bayar, refund harus di-proses manual di dashboard PG.
             </p>
             <div className="flex gap-2">
               <button
