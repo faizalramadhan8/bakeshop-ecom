@@ -6,7 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ordersApi, accountApi, formatRp, formatETD, type CustomerOrderDetail } from "@/lib/api";
+import { ordersApi, accountApi, complaintApi, formatRp, formatETD, type ComplaintReason, type CustomerOrderDetail } from "@/lib/api";
 
 // Map courier name (case-insensitive substring) → tracking URL template.
 // Return null kalau kurir tidak dikenal — FE hide tombol lacak.
@@ -88,6 +88,11 @@ export function PesananDetail() {
   // ulasan mumpung habis unboxing. Cegah "reminder review" via push nanti.
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // Sprint 1 (30 Jul 2026): customer bisa cancel + retry payment sendiri
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [complaintOpen, setComplaintOpen] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -98,6 +103,39 @@ export function PesananDetail() {
       .finally(() => setLoading(false));
   };
   useEffect(load, [id]);
+
+  const submitCancel = async () => {
+    if (!id || cancelling) return;
+    setCancelling(true);
+    try {
+      const updated = await ordersApi.cancelPending(id);
+      setOrder(updated);
+      setCancelOpen(false);
+      toast.success("Pesanan dibatalkan");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal batalkan");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const doRetryPayment = async () => {
+    if (!id || retrying) return;
+    setRetrying(true);
+    try {
+      const updated = await ordersApi.retryPayment(id);
+      setOrder(updated);
+      toast.success("Link bayar baru siap. Klik 'Bayar Sekarang'.");
+      // Auto redirect ke payment_url baru kalau ada (customer klik sekali)
+      if (updated.payment.payment_url && !updated.payment.payment_url.startsWith("stub-")) {
+        window.open(updated.payment.payment_url, "_blank", "noopener");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal buat link baru");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const submitConfirm = async () => {
     if (!id || confirming) return;
@@ -242,10 +280,20 @@ export function PesananDetail() {
                 )}
               </button>
               {order.ecom_status === "delivered" && (
-                <p className="text-xs text-ink-500 mt-2 leading-snug">
-                  Kalau tidak konfirmasi dalam 7 hari, pesanan akan otomatis
-                  ditandai selesai.
-                </p>
+                <>
+                  <p className="text-xs text-ink-500 mt-2 leading-snug">
+                    Kalau tidak konfirmasi dalam 7 hari, pesanan akan otomatis
+                    ditandai selesai.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setComplaintOpen(true)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-ink-500 hover:text-amber-600"
+                  >
+                    <AlertCircle size={12} aria-hidden="true" />
+                    Ada masalah dengan pesanan?
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -265,6 +313,14 @@ export function PesananDetail() {
                 Terima kasih sudah belanja di Toko Bahan Kue Santi. Jangan
                 lupa tulis ulasan untuk produk yang kamu beli.
               </p>
+              <button
+                type="button"
+                onClick={() => setComplaintOpen(true)}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-ink-500 hover:text-amber-600"
+              >
+                <AlertCircle size={12} aria-hidden="true" />
+                Ada masalah dengan pesanan?
+              </button>
             </div>
           </div>
         </div>
@@ -289,15 +345,44 @@ export function PesananDetail() {
                       Metode: <span className="font-bold uppercase">{order.payment.channel}</span>
                     </p>
                   )}
-                  <a
-                    href={order.payment.payment_url}
-                    target="_blank"
-                    rel="noopener"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
-                  >
-                    <CreditCard size={14} aria-hidden="true" />
-                    Bayar Sekarang
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={order.payment.payment_url}
+                      target="_blank"
+                      rel="noopener"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
+                    >
+                      <CreditCard size={14} aria-hidden="true" />
+                      Bayar Sekarang
+                    </a>
+                    <button
+                      type="button"
+                      onClick={doRetryPayment}
+                      disabled={retrying}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-cherry-600 border border-cherry-200 bg-white hover:bg-cherry-50 disabled:opacity-40"
+                    >
+                      {retrying ? (
+                        <>
+                          <Clock size={12} className="animate-spin" aria-hidden="true" />
+                          Memuat…
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} aria-hidden="true" />
+                          Link Kadaluarsa? Buat Ulang
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCancelOpen(true)}
+                      disabled={cancelling}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-ink-500 hover:text-cherry-600 hover:bg-cherry-50 disabled:opacity-40"
+                    >
+                      <X size={12} aria-hidden="true" />
+                      Batalkan Pesanan
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="mt-2 text-xs text-ink-700 leading-relaxed">
@@ -307,6 +392,15 @@ export function PesananDetail() {
                   <p className="text-ink-500">
                     Kontak admin: WhatsApp 08123456789
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => setCancelOpen(true)}
+                    disabled={cancelling}
+                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-ink-500 hover:text-cherry-600 hover:bg-cherry-50 disabled:opacity-40"
+                  >
+                    <X size={12} aria-hidden="true" />
+                    Batalkan Pesanan
+                  </button>
                 </div>
               )}
             </div>
@@ -437,6 +531,23 @@ export function PesananDetail() {
           confirming={confirming}
           onCancel={() => setConfirmOpen(false)}
           onConfirm={submitConfirm}
+        />
+      )}
+
+      {/* Modal konfirmasi batalkan — destructive action, wajib explicit. */}
+      {cancelOpen && (
+        <CancelOrderModal
+          cancelling={cancelling}
+          onCancel={() => setCancelOpen(false)}
+          onConfirm={submitCancel}
+        />
+      )}
+
+      {/* Modal ajukan komplain — customer report barang rusak/salah/kurang */}
+      {complaintOpen && order && (
+        <ComplaintModal
+          orderID={order.id}
+          onClose={() => setComplaintOpen(false)}
         />
       )}
 
@@ -790,6 +901,280 @@ function ReviewComposerModal({
             className="w-full mt-2 h-11 rounded-xl text-sm font-bold text-ink-500 hover:text-ink-700 hover:bg-cherry-50/50 disabled:opacity-40"
           >
             Nanti Saja
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CancelOrderModal ─────────────────────────────────────────────────
+// Destructive action modal — batalkan order pending. Warning tone amber
+// (bukan cherry karena bukan CTA utama). Copy jujur: setelah dibatalkan
+// tidak bisa dibuka lagi.
+function CancelOrderModal({
+  cancelling,
+  onCancel,
+  onConfirm,
+}: {
+  cancelling: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !cancelling) onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [cancelling, onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cancel-title"
+    >
+      <div
+        className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-fade-in"
+        onClick={() => !cancelling && onCancel()}
+      />
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden modal-scale-in">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelling}
+          aria-label="Tutup"
+          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-ink-500 bg-white/70 backdrop-blur hover:bg-white disabled:opacity-40"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+
+        {/* Hero — amber warning tone */}
+        <div className="bg-gradient-to-b from-amber-50 to-white pt-8 pb-4 flex items-center justify-center">
+          <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg shadow-amber-500/10">
+            <AlertCircle size={44} className="text-amber-500" strokeWidth={1.5} aria-hidden="true" />
+          </div>
+        </div>
+
+        <div className="px-6 pt-2 pb-6 text-center">
+          <h2 id="cancel-title" className="text-xl font-black text-ink-900 mb-2">
+            Batalkan pesanan?
+          </h2>
+          <p className="text-sm text-ink-500 leading-relaxed mb-6 max-w-xs mx-auto">
+            Kalau sudah dibatalkan, pesanan ini tidak bisa dilanjutkan lagi.
+            Kamu bisa buat pesanan baru kapan saja.
+          </p>
+
+          {/* Primary destructive di atas — highlight amber (bukan cherry
+              karena action ini tidak "sukses", tapi warning) */}
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={cancelling}
+            className="w-full h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {cancelling ? (
+              <>
+                <Clock size={14} className="animate-spin" aria-hidden="true" />
+                Membatalkan…
+              </>
+            ) : (
+              <>
+                <X size={16} strokeWidth={3} aria-hidden="true" />
+                Ya, Batalkan
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={cancelling}
+            className="w-full mt-2 h-11 rounded-xl text-sm font-bold text-ink-500 hover:text-ink-700 hover:bg-cherry-50/50 disabled:opacity-40"
+          >
+            Tidak Jadi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ComplaintModal ───────────────────────────────────────────────────
+// Customer report barang rusak/salah/kurang. Bu Santi lihat + reply via
+// admin panel. Reason dropdown + description + (optional) image upload
+// URL list. Untuk sekarang skip image upload — bisa follow-up sprint.
+
+const REASON_OPTIONS: { value: ComplaintReason; label: string; desc: string }[] = [
+  { value: "barang_rusak", label: "Barang rusak", desc: "Kemasan penyok, bocor, atau isi rusak" },
+  { value: "barang_salah", label: "Barang salah", desc: "Bukan produk yang dipesan" },
+  { value: "barang_kurang", label: "Barang tidak lengkap", desc: "Jumlah kurang dari yang dipesan" },
+  { value: "lainnya", label: "Lainnya", desc: "Masalah lain — jelaskan di deskripsi" },
+];
+
+function ComplaintModal({
+  orderID,
+  onClose,
+}: {
+  orderID: string;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState<ComplaintReason | "">("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [submitting, onClose]);
+
+  const submit = async () => {
+    if (!reason) {
+      toast.error("Pilih jenis masalah dulu");
+      return;
+    }
+    if (description.trim().length < 10) {
+      toast.error("Deskripsi minimal 10 karakter");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await complaintApi.submit({
+        order_id: orderID,
+        reason,
+        description: description.trim(),
+      });
+      toast.success("Komplain terkirim. Admin akan balas dalam 1×24 jam.");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal kirim komplain");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="complaint-title"
+    >
+      <div
+        className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-fade-in"
+        onClick={() => !submitting && onClose()}
+      />
+      <div className="relative bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col modal-sheet-in overflow-hidden">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          aria-label="Tutup"
+          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-ink-500 bg-white/70 backdrop-blur hover:bg-white disabled:opacity-40"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+
+        {/* Hero — amber tone (bukan celebration) */}
+        <div className="bg-gradient-to-b from-amber-50 to-white pt-7 pb-4 text-center shrink-0">
+          <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-white flex items-center justify-center shadow-lg shadow-amber-400/15">
+            <AlertCircle size={40} className="text-amber-500" strokeWidth={1.5} aria-hidden="true" />
+          </div>
+          <h2 id="complaint-title" className="text-xl font-black text-ink-900 mb-1 px-6">
+            Ada masalah dengan pesanan?
+          </h2>
+          <p className="text-sm text-ink-500 leading-relaxed px-6 max-w-sm mx-auto">
+            Ceritakan detailnya, tim kami akan bantu selesaikan.
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4">
+          {/* Reason radio cards */}
+          <p className="text-xs font-black uppercase tracking-wider text-ink-500 mb-2">
+            Jenis Masalah
+          </p>
+          <div className="flex flex-col gap-2 mb-5">
+            {REASON_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setReason(opt.value)}
+                disabled={submitting}
+                className={`flex items-start gap-3 px-3 py-3 rounded-xl border-2 text-left min-h-[64px] ${
+                  reason === opt.value
+                    ? "border-amber-500 bg-amber-50"
+                    : "border-cherry-100 bg-white hover:border-cherry-300"
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full border-2 shrink-0 mt-0.5 flex items-center justify-center ${
+                    reason === opt.value ? "border-amber-500 bg-amber-500" : "border-cherry-300 bg-white"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {reason === opt.value && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black text-ink-900">{opt.label}</p>
+                  <p className="text-xs text-ink-500 mt-0.5">{opt.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Description */}
+          <p className="text-xs font-black uppercase tracking-wider text-ink-500 mb-2">
+            Deskripsi Detail
+          </p>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            disabled={submitting}
+            placeholder="Ceritakan detail masalahnya. Semakin jelas, semakin cepat kami bantu."
+            rows={4}
+            maxLength={1000}
+            className="w-full px-3 py-2.5 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400 resize-none"
+          />
+          <p className="text-xs text-ink-500 mt-1 text-right">
+            {description.length} / 1000
+          </p>
+        </div>
+
+        <div className="px-5 sm:px-6 pt-3 pb-4 border-t border-cherry-100 shrink-0 bg-white">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting || !reason || description.trim().length < 10}
+            className="w-full h-12 rounded-xl text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-lg shadow-cherry-500/20 active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {submitting ? (
+              <>
+                <Clock size={14} className="animate-spin" aria-hidden="true" />
+                Mengirim…
+              </>
+            ) : (
+              "Kirim Komplain"
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="w-full mt-2 h-11 rounded-xl text-sm font-bold text-ink-500 hover:text-ink-700 hover:bg-cherry-50/50 disabled:opacity-40"
+          >
+            Batal
           </button>
         </div>
       </div>

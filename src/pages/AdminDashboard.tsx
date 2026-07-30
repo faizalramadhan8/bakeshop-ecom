@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft, Tag, Ticket } from "lucide-react";
+import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft, Tag, Ticket, MessageSquare } from "lucide-react";
 import { setToken, decodeToken } from "@/lib/api";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -39,6 +39,12 @@ export function AdminDashboard() {
       icon: <ShoppingCart size={20} />,
       title: "Pesanan Online",
       desc: "Terima, proses, kirim, input resi pesanan customer",
+    },
+    {
+      to: "/admin/komplain",
+      icon: <MessageSquare size={20} />,
+      title: "Komplain Customer",
+      desc: "Balas keluhan customer soal barang rusak/salah/kurang",
     },
     {
       to: "#",

@@ -19,6 +19,7 @@ import { AdminKategori } from "@/pages/AdminKategori";
 import { AdminPesananList } from "@/pages/AdminPesananList";
 import { AdminPesananDetail } from "@/pages/AdminPesananDetail";
 import { AdminVoucher } from "@/pages/AdminVoucher";
+import { AdminKomplain } from "@/pages/AdminKomplain";
 import { Profil } from "@/pages/Profil";
 import { LupaPassword } from "@/pages/LupaPassword";
 import { Wishlist } from "@/pages/Wishlist";
@@ -68,6 +69,7 @@ export default function App() {
       <Route path="/admin/pesanan" element={<AdminPesananList />} />
       <Route path="/admin/pesanan/:id" element={<AdminPesananDetail />} />
       <Route path="/admin/voucher" element={<AdminVoucher />} />
+      <Route path="/admin/komplain" element={<AdminKomplain />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

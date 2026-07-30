@@ -133,6 +133,17 @@ export const adminApi = {
   getBiteshipBalance: () =>
     request<{ balance: number; currency: string }>("GET", "/ecom/admin/biteship/balance", undefined, "admin"),
 
+  // Sprint 1 #4 (30 Jul 2026) — Komplain customer admin panel.
+  listComplaints: (status?: string) =>
+    request<ComplaintAdmin[]>(
+      "GET",
+      `/ecom/admin/complaints${status && status !== "all" ? `?status=${status}` : ""}`,
+      undefined,
+      "admin",
+    ),
+  replyComplaint: (id: string, data: { reply: string; status: "in_review" | "resolved" | "rejected" }) =>
+    request<ComplaintAdmin>("PATCH", `/ecom/admin/complaints/${id}`, data, "admin"),
+
   // Sprint 5 — Voucher CRUD.
   listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),
   createVoucher: (data: VoucherPayload) =>
@@ -662,10 +673,46 @@ export interface CustomerOrderDetail {
   };
 }
 
+export type ComplaintReason = "barang_rusak" | "barang_salah" | "barang_kurang" | "lainnya";
+
+export interface Complaint {
+  id: string;
+  order_id: string;
+  user_id: string;
+  reason: ComplaintReason;
+  reason_label: string;
+  description: string;
+  images: string[];
+  status: "open" | "in_review" | "resolved" | "rejected";
+  admin_reply?: string;
+  created_at: string;
+  resolved_at?: string;
+}
+
+// Admin view — tambah user_name yang di-join BE dari users table
+export interface ComplaintAdmin extends Complaint {
+  user_name: string;
+}
+
+export const complaintApi = {
+  submit: (data: {
+    order_id: string;
+    reason: ComplaintReason;
+    description: string;
+    images?: string[];
+  }) => request<Complaint>("POST", "/ecom/complaints", data, "customer"),
+  listMine: () => request<Complaint[]>("GET", "/ecom/complaints", undefined, "customer"),
+};
+
 export const ordersApi = {
   list: () => request<CustomerOrderListItem[]>("GET", "/ecom/orders", undefined, "customer"),
   getDetail: (id: string) => request<CustomerOrderDetail>("GET", `/ecom/orders/${id}`, undefined, "customer"),
   // Marketplace-style "Barang Diterima". Body kosong; ownership via JWT.
   confirmReceived: (id: string) =>
     request<CustomerOrderDetail>("POST", `/ecom/orders/${id}/confirm-received`, {}, "customer"),
+  // Sprint 1: cancel pending payment + retry link bayar
+  cancelPending: (id: string) =>
+    request<CustomerOrderDetail>("POST", `/ecom/orders/${id}/cancel`, {}, "customer"),
+  retryPayment: (id: string) =>
+    request<CustomerOrderDetail>("POST", `/ecom/orders/${id}/retry-payment`, {}, "customer"),
 };
