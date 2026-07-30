@@ -90,44 +90,47 @@ export function AdminKategori() {
     }
   };
 
-  const remove = async (c: EcomCategoryAdmin) => {
-    if (c.product_count > 0) {
-      if (!confirm(`Kategori "${c.name}" masih dipakai ${c.product_count} produk. Kalau dihapus, produk tersebut jadi tanpa kategori (masih tetap ada). Lanjutkan?`)) {
-        return;
-      }
-    } else if (!confirm(`Hapus kategori "${c.name}"?`)) {
-      return;
-    }
+  // Sprint 3 admin polish (30 Jul 2026): ganti window.confirm dengan inline
+  // confirm banner (pattern Voucher). Cegah UX ugly + supaya pesan pakai
+  // formatting proper (bold, warning tone).
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const doRemove = async (c: EcomCategoryAdmin) => {
+    setRemoving(true);
     try {
       await adminApi.deleteCategory(c.id);
       toast.success("Kategori dihapus");
+      setConfirmingId(null);
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal hapus");
+    } finally {
+      setRemoving(false);
     }
   };
 
   return (
     <main className="min-h-screen p-6">
       <div className="max-w-3xl mx-auto">
-        <Link
-          to="/admin"
-          className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
-        >
-          <ArrowLeft size={16} />
-          Dashboard Admin
-        </Link>
-
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-black text-ink-900">Kategori Ecommerce</h1>
-            <p className="text-sm text-ink-500 mt-1">
-              Kelompok produk yang tampil di storefront online. Terpisah dari kategori POS.
+        {/* Header consistent: back icon-only + heading + subtitle + CTA */}
+        <div className="flex items-center gap-3 mb-5">
+          <Link
+            to="/admin"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 shrink-0"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-black text-ink-900">Kategori Ecommerce</h1>
+            <p className="text-xs text-ink-500 mt-0.5">
+              Kelompok produk yang tampil di storefront. Terpisah dari kategori POS.
             </p>
           </div>
           <button
             onClick={openCreate}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90"
+            className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 shrink-0"
           >
             <Plus size={14} />
             Tambah
@@ -239,7 +242,10 @@ export function AdminKategori() {
         )}
 
         {loading ? (
-          <div className="py-16 text-center text-ink-500 text-sm">Memuat…</div>
+          <div className="py-16 text-center text-ink-500 text-sm">
+            <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+            Memuat kategori…
+          </div>
         ) : items.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-cherry-200">
             <Package size={40} className="mx-auto text-ink-500 opacity-40 mb-2" />
@@ -251,38 +257,81 @@ export function AdminKategori() {
         ) : (
           <div className="flex flex-col gap-2">
             {items.map((c) => (
-              <div
-                key={c.id}
-                className={`flex items-center gap-3 p-4 rounded-2xl bg-white border ${
-                  c.is_active ? "border-cherry-200" : "border-ink-200 opacity-60"
-                }`}
-              >
-                <div className="w-12 h-12 rounded-xl bg-cherry-50 flex items-center justify-center text-cherry-500 shrink-0">
-                  <CategoryIcon nameId={c.name_id || c.name} iconName={c.icon_name} size={22} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-ink-900 truncate">
-                    {c.name_id || c.name}
-                  </p>
-                  <p className="text-xs text-ink-500">
-                    {c.product_count} produk · Urutan {c.sort_order}
-                    {!c.is_active && " · Nonaktif"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => openEdit(c)}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-700 hover:bg-cherry-50 hover:text-cherry-500"
-                  aria-label="Edit"
+              <div key={c.id} className="flex flex-col gap-2">
+                <div
+                  className={`flex items-center gap-3 p-4 rounded-2xl bg-white border ${
+                    c.is_active ? "border-cherry-200" : "border-ink-200 opacity-60"
+                  }`}
                 >
-                  <Edit3 size={14} />
-                </button>
-                <button
-                  onClick={() => remove(c)}
-                  className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-700 hover:bg-red-50 hover:text-red-500"
-                  aria-label="Hapus"
-                >
-                  <Trash2 size={14} />
-                </button>
+                  <div className="w-12 h-12 rounded-xl bg-cherry-50 flex items-center justify-center text-cherry-500 shrink-0">
+                    <CategoryIcon nameId={c.name_id || c.name} iconName={c.icon_name} size={22} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-ink-900 truncate">
+                      {c.name_id || c.name}
+                    </p>
+                    <p className="text-xs text-ink-500">
+                      {c.product_count} produk · Urutan {c.sort_order}
+                      {!c.is_active && " · Nonaktif"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => openEdit(c)}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-700 hover:bg-cherry-50 hover:text-cherry-500"
+                    aria-label="Edit"
+                  >
+                    <Edit3 size={14} />
+                  </button>
+                  <button
+                    onClick={() => setConfirmingId(c.id)}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-700 hover:bg-red-50 hover:text-red-500"
+                    aria-label="Hapus"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                {/* Inline confirm — pattern Voucher, cegah window.confirm ugly */}
+                {confirmingId === c.id && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-sm text-ink-900 mb-2">
+                      Hapus kategori <b>{c.name_id || c.name}</b>?
+                    </p>
+                    {c.product_count > 0 && (
+                      <p className="text-xs text-ink-700 mb-3">
+                        Kategori ini masih dipakai <b>{c.product_count} produk</b>. Kalau
+                        dihapus, produk tersebut jadi tanpa kategori (produknya tetap ada).
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => doRemove(c)}
+                        disabled={removing}
+                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-md active:scale-[0.98] disabled:opacity-40"
+                      >
+                        {removing ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                            Menghapus…
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 size={12} aria-hidden="true" />
+                            Ya, Hapus
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        disabled={removing}
+                        className="h-9 px-3 rounded-lg text-xs font-bold text-ink-500 hover:text-ink-700 disabled:opacity-40"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

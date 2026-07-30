@@ -39,7 +39,7 @@ export function decodeToken(): { role?: string; email?: string; fullname?: strin
 
 type Scope = "admin" | "customer" | "public";
 
-async function request<T = unknown>(
+export async function request<T = unknown>(
   method: string,
   path: string,
   body?: unknown,
@@ -165,6 +165,10 @@ export const adminApi = {
     request<EcomAdminDashboardStats>("GET", "/ecom/admin/dashboard", undefined, "admin"),
   getLowStock: (limit = 10) =>
     request<EcomLowStockItem[]>("GET", `/ecom/admin/low-stock?limit=${limit}`, undefined, "admin"),
+
+  // Sprint 3 #16 — Admin dispatch restock notif
+  dispatchRestockNotif: (productID: string) =>
+    request<null>("POST", `/ecom/admin/products/${productID}/dispatch-restock`, {}, "admin"),
 
   // Sprint 5 — Voucher CRUD.
   listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),

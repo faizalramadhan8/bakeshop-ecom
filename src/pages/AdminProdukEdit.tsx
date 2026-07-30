@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Save, AlertCircle, Info, Upload, Camera, Image as ImageIcon, X, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, AlertCircle, Info, Upload, Camera, Image as ImageIcon, X, Loader2, Bell } from "lucide-react";
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomAdminProduct, type EcomCategoryAdmin } from "@/lib/api";
 
@@ -164,7 +164,12 @@ export function AdminProdukEdit() {
   };
 
   if (loading) {
-    return <main className="min-h-screen p-6 text-center text-ink-500">Memuat…</main>;
+    return (
+      <main className="min-h-screen p-6 text-center text-ink-500 text-sm">
+        <Loader2 size={20} className="animate-spin mx-auto mt-16 mb-2" />
+        Memuat produk…
+      </main>
+    );
   }
   if (error || !product) {
     return (
@@ -195,16 +200,20 @@ export function AdminProdukEdit() {
   return (
     <main className="min-h-screen p-6">
       <div className="max-w-2xl mx-auto">
-        <Link
-          to="/admin/produk"
-          className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
-        >
-          <ArrowLeft size={16} />
-          Kembali ke daftar
-        </Link>
-
-        <h1 className="text-2xl font-black text-ink-900 mb-1">{product.name}</h1>
-        <p className="text-sm text-ink-500 mb-6">SKU: {product.sku}</p>
+        {/* Header consistent: back icon-only + heading + subtitle */}
+        <div className="flex items-center gap-3 mb-5">
+          <Link
+            to="/admin/produk"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 shrink-0"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-black text-ink-900 truncate">{product.name}</h1>
+            <p className="text-xs text-ink-500 mt-0.5">SKU: {product.sku}</p>
+          </div>
+        </div>
 
         {warnings.length > 0 && (
           <div className="bg-amber-50 border border-amber-500/30 rounded-2xl p-4 mb-6">
@@ -422,6 +431,15 @@ export function AdminProdukEdit() {
                 (dikelola di POS, tidak di sini)
               </p>
             </div>
+
+            {/* Sprint 3 #16 — Dispatch restock alert kalau produk sudah
+                restock. Muncul cuma kalau stock_ecom saat ini > 0. Idempotent
+                di BE (subscriber yang sudah notified skip auto). */}
+            {product.stock_ecom > 0 && (
+              <div className="mt-4 pt-4 border-t border-cherry-100">
+                <RestockDispatchButton productID={product.id} productName={product.name_id} />
+              </div>
+            )}
           </section>
 
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
@@ -507,5 +525,94 @@ export function AdminProdukEdit() {
         </div>
       </div>
     </main>
+  );
+}
+
+// ─── RestockDispatchButton ───────────────────────────────────────────
+// Sprint 3 #16 — Admin trigger email + push notif ke customer yang subscribe
+// restock alert. Idempotent di BE (mark notified_at cegah dobel kirim).
+// Inline confirm pattern (Voucher style) — cegah accidental send massal.
+function RestockDispatchButton({ productID, productName }: { productID: string; productName: string }) {
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentAt, setSentAt] = useState<Date | null>(null);
+
+  const send = async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await adminApi.dispatchRestockNotif(productID);
+      setSentAt(new Date());
+      setConfirming(false);
+      toast.success("Notifikasi restock terkirim ke customer yang subscribe");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal kirim notif");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sentAt) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5">
+        <Bell size={12} aria-hidden="true" />
+        <span className="font-bold">
+          Notifikasi terkirim{" "}
+          {sentAt.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      </div>
+    );
+  }
+
+  if (confirming) {
+    return (
+      <div className="bg-cherry-50 border border-cherry-200 rounded-xl p-3">
+        <p className="text-sm text-ink-900 mb-2">
+          Kirim email + push ke semua customer yang subscribe alert untuk <b>{productName}</b>?
+        </p>
+        <p className="text-xs text-ink-500 mb-3">
+          Sistem otomatis skip customer yang sudah di-notif sebelumnya (cegah spam).
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={send}
+            disabled={sending}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-md active:scale-[0.98] disabled:opacity-40"
+          >
+            {sending ? (
+              <>
+                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                Mengirim…
+              </>
+            ) : (
+              <>
+                <Bell size={12} aria-hidden="true" />
+                Ya, Kirim
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={sending}
+            className="h-9 px-3 rounded-lg text-xs font-bold text-ink-500 hover:text-ink-700 disabled:opacity-40"
+          >
+            Batal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirming(true)}
+      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold text-cherry-600 border border-cherry-300 bg-white hover:bg-cherry-50"
+    >
+      <Bell size={12} aria-hidden="true" />
+      Kirim Notif Restock ke Subscriber
+    </button>
   );
 }

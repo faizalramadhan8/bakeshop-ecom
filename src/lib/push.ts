@@ -23,14 +23,17 @@ async function getVapidPublicKey(): Promise<string> {
   }
 }
 
-// Convert base64 VAPID key → Uint8Array (Web Push API requirement).
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// Convert base64 VAPID key → ArrayBuffer (Web Push API requirement).
+// Return ArrayBuffer supaya lolos TS strict check applicationServerKey typing
+// yang expect BufferSource (Uint8Array<SharedArrayBuffer> ditolak di TS 5.7+).
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = window.atob(base64);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
+  const buf = new ArrayBuffer(raw.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < raw.length; i++) view[i] = raw.charCodeAt(i);
+  return buf;
 }
 
 export function pushSupported(): boolean {
@@ -81,7 +84,7 @@ export async function requestPushPermission(): Promise<{ success: boolean; messa
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToArrayBuffer(vapidKey),
       });
     }
     // Kirim subscription ke BE (endpoint existing dari POS push infra)

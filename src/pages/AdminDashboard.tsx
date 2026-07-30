@@ -224,10 +224,11 @@ export function AdminDashboard() {
         </div>
 
         <div className="mt-8 bg-cherry-50 rounded-2xl border border-cherry-200 p-5">
-          <h3 className="text-sm font-black text-ink-900 mb-2">v0.1 · Fase 1 skeleton</h3>
+          <h3 className="text-sm font-black text-ink-900 mb-2">Butuh bantuan?</h3>
           <p className="text-xs text-ink-700 leading-relaxed">
-            Sekarang bisa manage produk online (allocate stok + set harga).
-            Fitur order, customer, laporan menyusul di fase berikutnya.
+            Kalau ada kendala teknis atau permintaan fitur baru, hubungi tim developer
+            via WhatsApp. Data storefront terpisah dari POS — perubahan di sini tidak
+            mengganggu operasi kasir.
           </p>
         </div>
       </div>

@@ -23,6 +23,8 @@ export function AdminVoucher() {
   const [items, setItems] = useState<VoucherAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  // Filter chips — supaya admin cepat cari voucher aktif vs nonaktif.
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -127,22 +129,22 @@ export function AdminVoucher() {
   return (
     <main className="min-h-screen p-4 sm:p-6">
       <div className="max-w-3xl mx-auto">
-        <Link
-          to="/admin"
-          className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
-        >
-          <ArrowLeft size={16} aria-hidden="true" />
-          Dashboard Admin
-        </Link>
-
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-black text-ink-900">Voucher & Promo</h1>
-            <p className="text-sm text-ink-500 mt-1">Kode diskon untuk customer online.</p>
+        {/* Header consistent: back icon-only + heading + subtitle + CTA di kanan */}
+        <div className="flex items-center gap-3 mb-5">
+          <Link
+            to="/admin"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 shrink-0"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} aria-hidden="true" />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-black text-ink-900">Voucher & Promo</h1>
+            <p className="text-xs text-ink-500 mt-0.5">Kode diskon untuk customer online.</p>
           </div>
           <button
             onClick={openCreate}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
+            className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 shrink-0"
           >
             <Plus size={14} aria-hidden="true" /> Tambah
           </button>
@@ -282,16 +284,65 @@ export function AdminVoucher() {
           </div>
         )}
 
+        {/* Filter chips — active/inactive quick narrow */}
+        {!loading && items.length > 0 && (
+          <div className="flex gap-2 mb-3">
+            {(
+              [
+                { key: "all", label: "Semua" },
+                { key: "active", label: "Aktif" },
+                { key: "inactive", label: "Nonaktif" },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setStatusFilter(f.key)}
+                className={`px-3 h-8 rounded-full text-xs font-bold ${
+                  statusFilter === f.key
+                    ? "bg-cherry-500 text-white"
+                    : "bg-white border border-cherry-200 text-ink-700 hover:bg-cherry-50"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {loading ? (
-          <div className="py-16 text-center text-ink-500 text-sm">Memuat…</div>
+          <div className="py-16 text-center text-ink-500 text-sm">
+            <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+            Memuat voucher…
+          </div>
         ) : items.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-2xl border border-cherry-200">
-            <Ticket size={40} className="mx-auto text-ink-500 opacity-40 mb-2" aria-hidden="true" />
-            <p className="text-sm text-ink-700">Belum ada voucher</p>
+            <div className="w-16 h-16 rounded-full bg-cherry-50 mx-auto mb-3 flex items-center justify-center">
+              <Ticket size={30} className="text-cherry-300" aria-hidden="true" />
+            </div>
+            <p className="text-sm font-black text-ink-900 mb-1">Belum ada voucher</p>
+            <p className="text-xs text-ink-500">Bikin voucher pertama untuk narik customer.</p>
           </div>
-        ) : (
+        ) : (() => {
+          const filtered = items.filter((v) => {
+            if (statusFilter === "active") return v.is_active;
+            if (statusFilter === "inactive") return !v.is_active;
+            return true;
+          });
+          if (filtered.length === 0) {
+            return (
+              <div className="py-16 text-center bg-white rounded-2xl border border-cherry-200">
+                <div className="w-16 h-16 rounded-full bg-cherry-50 mx-auto mb-3 flex items-center justify-center">
+                  <Ticket size={30} className="text-cherry-300" aria-hidden="true" />
+                </div>
+                <p className="text-sm font-black text-ink-900 mb-1">Tidak ada hasil</p>
+                <p className="text-xs text-ink-500">Coba ganti filter di atas.</p>
+              </div>
+            );
+          }
+          return (
           <div className="flex flex-col gap-2">
-            {items.map((v) => (
+            {filtered.map((v) => (
               <div
                 key={v.id}
                 className={`bg-white rounded-2xl border p-4 ${v.is_active ? "border-cherry-200" : "border-ink-200 opacity-60"}`}
@@ -348,7 +399,8 @@ export function AdminVoucher() {
               </div>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
     </main>
   );

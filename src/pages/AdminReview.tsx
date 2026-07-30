@@ -29,6 +29,8 @@ export function AdminReview() {
   const [filter, setFilter] = useState<"all" | "hidden">("all");
   const [search, setSearch] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
+  // Inline confirm state — cegah window.confirm ugly. Sprint 3 admin polish.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -51,19 +53,17 @@ export function AdminReview() {
       })
     : items;
 
-  const toggleHide = async (r: ReviewAdmin) => {
+  // Aksi tampil-kembali langsung (tidak destruktif). Aksi sembunyikan gate ke
+  // inline confirm panel supaya jelas + tidak trigger native dialog.
+  const performToggle = async (r: ReviewAdmin, nextHidden: boolean) => {
     if (processing === r.id) return;
-    const nextHidden = !r.is_hidden;
-    if (nextHidden && !window.confirm(`Sembunyikan review ini dari halaman produk?\n\n"${r.comment || "(tanpa komentar)"}"\n\nReview tetap tersimpan, cuma tidak tampil ke customer lain.`)) {
-      return;
-    }
     setProcessing(r.id);
     try {
       await adminApi.toggleReviewHide(r.id, nextHidden);
-      // Update local state — tidak perlu re-fetch
       setItems((prev) =>
         prev.map((x) => (x.id === r.id ? { ...x, is_hidden: nextHidden } : x))
       );
+      setConfirmingId(null);
       toast.success(nextHidden ? "Review disembunyikan" : "Review ditampilkan kembali");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal update");
@@ -194,25 +194,67 @@ export function AdminReview() {
                 </p>
               )}
               <div className="mt-3 pt-3 border-t border-cherry-100">
-                <button
-                  type="button"
-                  onClick={() => toggleHide(r)}
-                  disabled={processing === r.id}
-                  className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold disabled:opacity-40 ${
-                    r.is_hidden
-                      ? "border border-emerald-500 text-emerald-700 hover:bg-emerald-50"
-                      : "border border-red-500 text-red-600 hover:bg-red-50"
-                  }`}
-                >
-                  {processing === r.id ? (
-                    <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-                  ) : r.is_hidden ? (
-                    <Eye size={12} aria-hidden="true" />
-                  ) : (
-                    <EyeOff size={12} aria-hidden="true" />
-                  )}
-                  {r.is_hidden ? "Tampilkan Kembali" : "Sembunyikan"}
-                </button>
+                {confirmingId === r.id ? (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-sm text-ink-900 mb-1">
+                      Sembunyikan ulasan ini dari halaman produk?
+                    </p>
+                    <p className="text-xs text-ink-500 mb-3">
+                      Ulasan tetap tersimpan di database — customer lain tidak akan
+                      melihatnya. Bisa ditampilkan kembali kapan saja.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => performToggle(r, true)}
+                        disabled={processing === r.id}
+                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-md active:scale-[0.98] disabled:opacity-40"
+                      >
+                        {processing === r.id ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                            Menyembunyikan…
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff size={12} aria-hidden="true" />
+                            Ya, Sembunyikan
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        disabled={processing === r.id}
+                        className="h-9 px-3 rounded-lg text-xs font-bold text-ink-500 hover:text-ink-700 disabled:opacity-40"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      r.is_hidden ? performToggle(r, false) : setConfirmingId(r.id)
+                    }
+                    disabled={processing === r.id}
+                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold disabled:opacity-40 ${
+                      r.is_hidden
+                        ? "border border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                        : "border border-red-500 text-red-600 hover:bg-red-50"
+                    }`}
+                  >
+                    {processing === r.id ? (
+                      <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                    ) : r.is_hidden ? (
+                      <Eye size={12} aria-hidden="true" />
+                    ) : (
+                      <EyeOff size={12} aria-hidden="true" />
+                    )}
+                    {r.is_hidden ? "Tampilkan Kembali" : "Sembunyikan"}
+                  </button>
+                )}
               </div>
             </div>
           ))}

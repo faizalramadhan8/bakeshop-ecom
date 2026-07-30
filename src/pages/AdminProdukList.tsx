@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Search, Package, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { ArrowLeft, Search, Package, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { adminApi, decodeToken, type EcomAdminProduct } from "@/lib/api";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -15,6 +15,8 @@ export function AdminProdukList() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Filter chips supaya admin cepat cari "yang tayang" / "yang perlu setup" tanpa scroll.
+  const [statusFilter, setStatusFilter] = useState<"all" | "tayang" | "perlu_setup" | "hidden">("all");
 
   useEffect(() => {
     const claims = decodeToken();
@@ -44,20 +46,24 @@ export function AdminProdukList() {
   return (
     <main className="min-h-screen p-6">
       <div className="max-w-5xl mx-auto">
-        <Link
-          to="/admin"
-          className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
-        >
-          <ArrowLeft size={16} />
-          Kembali ke Dashboard
-        </Link>
+        {/* Header consistent dengan AdminKomplain: back icon-only + heading + subtitle inline */}
+        <div className="flex items-center gap-3 mb-5">
+          <Link
+            to="/admin"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-black text-ink-900">Produk Online</h1>
+            <p className="text-xs text-ink-500 mt-0.5">
+              Publish produk ke storefront + manage stok dan harga online.
+            </p>
+          </div>
+        </div>
 
-        <h1 className="text-2xl font-black text-ink-900 mb-1">Produk Online</h1>
-        <p className="text-sm text-ink-700 mb-6">
-          Publish produk ke storefront + manage stok dan harga online
-        </p>
-
-        <div className="relative mb-6">
+        <div className="relative mb-3">
           <Search
             size={18}
             className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500 pointer-events-none"
@@ -70,24 +76,72 @@ export function AdminProdukList() {
           />
         </div>
 
+        {/* Filter chips — quick narrow by status */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {(
+            [
+              { key: "all", label: "Semua" },
+              { key: "tayang", label: "Tayang" },
+              { key: "perlu_setup", label: "Perlu Setup" },
+              { key: "hidden", label: "Disembunyikan" },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setStatusFilter(f.key)}
+              className={`px-3 h-8 rounded-full text-xs font-bold ${
+                statusFilter === f.key
+                  ? "bg-cherry-500 text-white"
+                  : "bg-white border border-cherry-200 text-ink-700 hover:bg-cherry-50"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
-          <div className="py-16 text-center text-ink-500">
-            <Package size={40} className="mx-auto opacity-30 mb-3 animate-pulse" />
-            <p className="text-sm font-semibold">Memuat produk…</p>
+          <div className="py-16 text-center text-ink-500 text-sm">
+            <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+            Memuat produk…
           </div>
         ) : error ? (
           <div className="py-16 text-center">
             <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" />
             <p className="text-sm font-semibold text-cherry-600">{error}</p>
           </div>
-        ) : products.length === 0 ? (
-          <div className="py-16 text-center text-ink-500">
-            <Package size={40} className="mx-auto opacity-30 mb-3" />
-            <p className="text-sm font-semibold">Belum ada produk</p>
-          </div>
-        ) : (
+        ) : (() => {
+          const filtered = products.filter((p) => {
+            const needsSetup = p.ecom_is_available && (!p.stock_ecom || !p.ecom_weight_grams);
+            const tayang = p.ecom_is_available && p.stock_ecom > 0 && p.ecom_weight_grams;
+            if (statusFilter === "tayang") return tayang;
+            if (statusFilter === "perlu_setup") return needsSetup;
+            if (statusFilter === "hidden") return !p.ecom_is_available;
+            return true;
+          });
+          if (filtered.length === 0) {
+            return (
+              <div className="py-16 text-center bg-white rounded-2xl border border-cherry-200">
+                <div className="w-16 h-16 rounded-full bg-cherry-50 mx-auto mb-3 flex items-center justify-center">
+                  <Package size={30} className="text-cherry-300" aria-hidden="true" />
+                </div>
+                <p className="text-sm font-black text-ink-900 mb-1">
+                  {statusFilter === "all" && !search
+                    ? "Belum ada produk"
+                    : "Tidak ada hasil"}
+                </p>
+                <p className="text-xs text-ink-500">
+                  {statusFilter === "all" && !search
+                    ? "Produk POS akan otomatis tampil di sini."
+                    : "Coba ubah filter atau kata kunci pencarian."}
+                </p>
+              </div>
+            );
+          }
+          return (
           <div className="bg-white rounded-2xl border border-cherry-200 overflow-hidden">
-            {products.map((p, idx) => {
+            {filtered.map((p, idx) => {
               const needsSetup = p.ecom_is_available && (!p.stock_ecom || !p.ecom_weight_grams);
               const tayang = p.ecom_is_available && p.stock_ecom > 0 && p.ecom_weight_grams;
               return (
@@ -133,7 +187,8 @@ export function AdminProdukList() {
               );
             })}
           </div>
-        )}
+          );
+        })()}
       </div>
     </main>
   );
