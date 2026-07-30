@@ -6,11 +6,14 @@ import { ProductCard } from "@/components/ProductCard";
 import { BakeryLogo } from "@/components/BakeryLogo";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { useSEO } from "@/lib/seo";
+import { loadRecent } from "@/lib/recentlyViewed";
 
 export function Home() {
   useSEO({}); // default title/desc dari template
   const [categories, setCategories] = useState<EcomCategory[]>([]);
   const [featured, setFeatured] = useState<EcomProductListItem[]>([]);
+  // Sprint 3 #15 — recently viewed
+  const [recentProducts, setRecentProducts] = useState<EcomProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,6 +34,21 @@ export function Home() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Sprint 3 #15 — load recently viewed produk. Fetch parallel per ID
+  // (best-effort). Skip yang gagal fetch (produk mungkin sudah tidak tersedia).
+  useEffect(() => {
+    let cancelled = false;
+    const recent = loadRecent().slice(0, 8);
+    if (recent.length === 0) return;
+    Promise.all(
+      recent.map((r) => publicApi.getProduct(r.id).catch(() => null))
+    ).then((results) => {
+      if (cancelled) return;
+      setRecentProducts(results.filter((p): p is EcomProductListItem => p !== null));
+    });
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -115,6 +133,23 @@ export function Home() {
           )}
         </div>
       </section>
+
+      {/* Sprint 3 #15 — Recently Viewed. Horizontal scroll mobile, grid
+          desktop. Cuma tampil kalau ada history. */}
+      {recentProducts.length > 0 && (
+        <section className="py-6 border-t border-cherry-100">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-black text-ink-900">Baru Kamu Lihat</h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {recentProducts.slice(0, 8).map((p) => (
+                <ProductCard key={p.id} p={p} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Featured products */}
       <section className="py-6 border-t border-cherry-100">

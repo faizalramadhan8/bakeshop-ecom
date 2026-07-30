@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
 import { BottomNav } from "./BottomNav";
+import { FloatingWA } from "./FloatingWA";
 import { decodeToken } from "@/lib/api";
 
 // Layout untuk semua public storefront routes: Header sticky + main + BottomNav.
@@ -44,6 +45,7 @@ export function ShopLayout() {
         <Outlet />
       </main>
       <BottomNav />
+      <FloatingWA />
     </div>
   );
 }

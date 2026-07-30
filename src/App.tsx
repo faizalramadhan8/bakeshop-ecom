@@ -20,10 +20,12 @@ import { AdminPesananList } from "@/pages/AdminPesananList";
 import { AdminPesananDetail } from "@/pages/AdminPesananDetail";
 import { AdminVoucher } from "@/pages/AdminVoucher";
 import { AdminKomplain } from "@/pages/AdminKomplain";
+import { AdminReview } from "@/pages/AdminReview";
 import { Profil } from "@/pages/Profil";
 import { LupaPassword } from "@/pages/LupaPassword";
 import { Wishlist } from "@/pages/Wishlist";
 import { Cari } from "@/pages/Cari";
+import { TentangKami, FAQ, SyaratKetentuan, KebijakanPrivasi } from "@/pages/StaticPages";
 
 // AnalyticsListener — fire GA4 page_view + Meta PageView pada SPA route change.
 // Ini terpisah dari App biar useLocation ada di dalam <BrowserRouter>.
@@ -55,6 +57,11 @@ export default function App() {
         <Route path="/pesanan" element={<Pesanan />} />
         <Route path="/pesanan/:id" element={<PesananDetail />} />
         <Route path="/cari" element={<Cari />} />
+        {/* Sprint 3 #11 — legal & info pages */}
+        <Route path="/tentang" element={<TentangKami />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/syarat-ketentuan" element={<SyaratKetentuan />} />
+        <Route path="/kebijakan-privasi" element={<KebijakanPrivasi />} />
       </Route>
 
       {/* Public standalone (no ShopLayout — user belum login) */}
@@ -70,6 +77,7 @@ export default function App() {
       <Route path="/admin/pesanan/:id" element={<AdminPesananDetail />} />
       <Route path="/admin/voucher" element={<AdminVoucher />} />
       <Route path="/admin/komplain" element={<AdminKomplain />} />
+      <Route path="/admin/ulasan" element={<AdminReview />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

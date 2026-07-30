@@ -144,6 +144,28 @@ export const adminApi = {
   replyComplaint: (id: string, data: { reply: string; status: "in_review" | "resolved" | "rejected" }) =>
     request<ComplaintAdmin>("PATCH", `/ecom/admin/complaints/${id}`, data, "admin"),
 
+  // Sprint 3 #14 — Review moderation
+  listReviewsAdmin: (params?: { hidden_only?: boolean; product_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.hidden_only) q.set("hidden_only", "1");
+    if (params?.product_id) q.set("product_id", params.product_id);
+    const qs = q.toString();
+    return request<ReviewAdmin[]>(
+      "GET",
+      `/ecom/admin/reviews${qs ? "?" + qs : ""}`,
+      undefined,
+      "admin",
+    );
+  },
+  toggleReviewHide: (id: string, hidden: boolean) =>
+    request<null>("PATCH", `/ecom/admin/reviews/${id}`, { is_hidden: hidden }, "admin"),
+
+  // Sprint 3 #13 — Admin Dashboard stats + low stock
+  getDashboardStats: () =>
+    request<EcomAdminDashboardStats>("GET", "/ecom/admin/dashboard", undefined, "admin"),
+  getLowStock: (limit = 10) =>
+    request<EcomLowStockItem[]>("GET", `/ecom/admin/low-stock?limit=${limit}`, undefined, "admin"),
+
   // Sprint 5 — Voucher CRUD.
   listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),
   createVoucher: (data: VoucherPayload) =>
@@ -369,6 +391,9 @@ export const publicApi = {
     sort?: "price_asc" | "price_desc" | "name" | "";
     cursor?: string;
     limit?: number;
+    // Sprint 2 #7 — filter harga
+    min_price?: number;
+    max_price?: number;
   }) => {
     const q = new URLSearchParams();
     if (params?.category) q.set("category", params.category);
@@ -376,10 +401,22 @@ export const publicApi = {
     if (params?.sort) q.set("sort", params.sort);
     if (params?.cursor) q.set("cursor", params.cursor);
     if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.min_price && params.min_price > 0) q.set("min_price", String(params.min_price));
+    if (params?.max_price && params.max_price > 0) q.set("max_price", String(params.max_price));
     const qs = q.toString();
     return request<EcomProductListResponse>("GET", `/ecom/products${qs ? "?" + qs : ""}`);
   },
   getProduct: (id: string) => request<EcomProductDetail>("GET", `/ecom/products/${id}`),
+  // Sprint 2 #6 — Related products cross-sell
+  getRelated: (id: string, limit = 6) =>
+    request<EcomProductListItem[]>("GET", `/ecom/products/${id}/related?limit=${limit}`),
+  // Sprint 3 #16 — Restock alert
+  restockStatus: (id: string) =>
+    request<{ subscribed: boolean }>("GET", `/ecom/products/${id}/restock-alert`, undefined, "customer"),
+  restockSubscribe: (id: string) =>
+    request<null>("POST", `/ecom/products/${id}/restock-alert`, {}, "customer"),
+  restockUnsubscribe: (id: string) =>
+    request<null>("DELETE", `/ecom/products/${id}/restock-alert`, undefined, "customer"),
   listReviews: (productId: string, limit = 20) =>
     request<{ items: ReviewItem[]; summary: ReviewSummary }>(
       "GET", `/ecom/products/${productId}/reviews?limit=${limit}`
@@ -692,6 +729,40 @@ export interface Complaint {
 // Admin view — tambah user_name yang di-join BE dari users table
 export interface ComplaintAdmin extends Complaint {
   user_name: string;
+}
+
+// Sprint 3 #13 — Admin Dashboard Ecom widgets
+export interface EcomAdminDashboardStats {
+  today_revenue: number;
+  today_orders: number;
+  month_revenue: number;
+  month_orders: number;
+  status_counts: Record<string, number>;
+  top_products_month: Array<{ product_id: string; name: string; qty_sold: number; revenue: number }>;
+  total_customers: number;
+  complaints_pending: number;
+  low_stock_count: number;
+}
+
+export interface EcomLowStockItem {
+  id: string;
+  name: string;
+  sku: string;
+  stock_ecom: number;
+}
+
+// Sprint 3 #14 — Review moderation
+export interface ReviewAdmin {
+  id: string;
+  product_id: string;
+  product_name: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  rating: number;
+  comment?: string;
+  is_hidden: boolean;
+  created_at: string;
 }
 
 export const complaintApi = {

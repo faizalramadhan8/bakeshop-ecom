@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag, Check } from "lucide-react";
+import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag, Check, TrendingDown, Bell, BellOff } from "lucide-react";
 import toast from "react-hot-toast";
-import { publicApi, formatRp, type EcomProductDetail } from "@/lib/api";
+import { publicApi, formatRp, type EcomProductDetail, type EcomProductListItem } from "@/lib/api";
 import { addToCart } from "@/lib/cartStore";
 import { ProductGallery } from "@/components/ProductGallery";
 import { ProductReviews } from "@/components/ProductReviews";
+import { ProductCard } from "@/components/ProductCard";
 import { useSEO, productJsonLD } from "@/lib/seo";
 import { trackEvent } from "@/lib/analytics";
+import { pushRecent } from "@/lib/recentlyViewed";
 
 function formatWeight(grams?: number): string {
   if (!grams) return "";
@@ -27,6 +29,11 @@ export function Produk() {
   // `if (error) return` → crash silent saat product loaded karena jumlah hook
   // berubah antar render.
   const [adding, setAdding] = useState(false);
+  // Sprint 2 #6 — related products state
+  const [related, setRelated] = useState<EcomProductListItem[]>([]);
+  // Sprint 3 #16 — restock alert state
+  const [restockSub, setRestockSub] = useState(false);
+  const [restockLoading, setRestockLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -38,6 +45,16 @@ export function Produk() {
         if (cancelled) return;
         setProduct(p);
         setQty(p.min_order);
+        // Sprint 3 #15: track recently viewed (LRU localStorage)
+        pushRecent(p.id);
+        // Fetch related products (best-effort, tidak block PDP)
+        publicApi.getRelated(id, 8).then((r) => {
+          if (!cancelled) setRelated(r || []);
+        }).catch(() => {});
+        // Sprint 3 #16: cek restock subscribe status (best-effort, silent)
+        publicApi.restockStatus(id).then((r) => {
+          if (!cancelled) setRestockSub(r?.subscribed || false);
+        }).catch(() => {});
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Gagal load");
@@ -209,6 +226,72 @@ export function Produk() {
             )}
           </div>
 
+          {/* Stock urgency banner — pattern Tokopedia/Shopee "Stok tinggal N!"
+              untuk trigger FOMO + jujur ke customer. */}
+          {product.stock === 0 ? (
+            <div className="bg-ink-100 border border-ink-500/30 rounded-2xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Package size={16} className="text-ink-700 shrink-0" aria-hidden="true" />
+                <p className="text-sm font-black text-ink-700">Stok habis</p>
+              </div>
+              {/* Sprint 3 #16 — restock alert toggle */}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (restockLoading) return;
+                  setRestockLoading(true);
+                  try {
+                    if (restockSub) {
+                      await publicApi.restockUnsubscribe(product.id);
+                      setRestockSub(false);
+                      toast.success("Notifikasi restock dimatikan");
+                    } else {
+                      await publicApi.restockSubscribe(product.id);
+                      setRestockSub(true);
+                      toast.success("Kami akan kabari begitu produk restock");
+                    }
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Gagal ubah notifikasi");
+                  } finally {
+                    setRestockLoading(false);
+                  }
+                }}
+                disabled={restockLoading}
+                className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-bold border disabled:opacity-40 ${
+                  restockSub
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                    : "border-cherry-300 bg-white text-cherry-600 hover:bg-cherry-50"
+                }`}
+              >
+                {restockSub ? (
+                  <>
+                    <Bell size={12} aria-hidden="true" />
+                    Sudah aktif — Matikan
+                  </>
+                ) : (
+                  <>
+                    <BellOff size={12} aria-hidden="true" />
+                    Kabari saya kalau restock
+                  </>
+                )}
+              </button>
+            </div>
+          ) : product.stock <= 5 ? (
+            <div className="bg-amber-50 border border-amber-500/40 rounded-2xl p-3 flex items-center gap-2">
+              <TrendingDown size={16} className="text-amber-600 shrink-0" aria-hidden="true" />
+              <p className="text-sm font-black text-amber-700">
+                Stok tinggal {product.stock}! Buruan check-out.
+              </p>
+            </div>
+          ) : product.is_low_stock ? (
+            <div className="bg-cherry-50 border border-cherry-200 rounded-2xl p-3 flex items-center gap-2">
+              <TrendingDown size={16} className="text-cherry-500 shrink-0" aria-hidden="true" />
+              <p className="text-sm font-bold text-cherry-600">
+                Stok terbatas — tersisa {product.stock}
+              </p>
+            </div>
+          ) : null}
+
           {/* Grosir tier info */}
           {product.tiers && product.tiers.length > 0 && (
             <div className="bg-amber-50 border border-amber-500/30 rounded-2xl p-3">
@@ -324,6 +407,29 @@ export function Produk() {
 
       {/* Reviews (Sprint 5b) — display + submit form (gated ke completed orders) */}
       <ProductReviews productId={product.id} />
+
+      {/* Related Products (Sprint 2 #6) — cross-sell dari category sama.
+          Horizontal scroll di mobile, grid di desktop. Best-effort fetch. */}
+      {related.length > 0 && (
+        <section className="mt-6 border-t border-cherry-100 pt-5">
+          <div className="flex items-center justify-between gap-2 mb-3 px-4 sm:px-0">
+            <h2 className="text-lg font-black text-ink-900">Produk Sejenis</h2>
+            {product.category_id && (
+              <Link
+                to={`/kategori/${product.category_id}`}
+                className="text-sm font-bold text-cherry-500 hover:text-cherry-600 shrink-0"
+              >
+                Lihat semua
+              </Link>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {related.map((rp) => (
+              <ProductCard key={rp.id} p={rp} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Sticky action bar (mobile) — sits ABOVE BottomNav. BottomNav = fixed
           bottom-0 z-40 tinggi 56px+safe-area; action bar tumpuk di atasnya

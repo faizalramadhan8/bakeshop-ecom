@@ -5,9 +5,14 @@ import { Toaster } from "react-hot-toast";
 import "./index.css";
 import App from "./App";
 import { initAnalytics } from "@/lib/analytics";
+import { registerSW } from "@/lib/push";
 
 // Init GA4 + Meta Pixel (kalau env var di-set saat build).
 initAnalytics();
+
+// Register service worker silent — subscribe UI di Akun page.
+// Kalau browser tidak support, no-op.
+registerSW();
 
 // basename "/shop" match dengan Vite base config + POS nginx routing.
 // react-router treat this as prefix untuk semua route.

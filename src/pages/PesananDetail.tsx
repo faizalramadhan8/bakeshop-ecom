@@ -341,25 +341,29 @@ export function PesananDetail() {
               {order.payment.mode === "pg" && order.payment.payment_url ? (
                 <div className="mt-3">
                   {order.payment.channel && (
-                    <p className="text-xs text-ink-700 mb-2">
+                    <p className="text-xs text-ink-700 mb-3">
                       Metode: <span className="font-bold uppercase">{order.payment.channel}</span>
                     </p>
                   )}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <a
-                      href={order.payment.payment_url}
-                      target="_blank"
-                      rel="noopener"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500"
-                    >
-                      <CreditCard size={14} aria-hidden="true" />
-                      Bayar Sekarang
-                    </a>
+                  {/* Primary — full-width gradient cherry, sama pattern
+                      dengan modal CTA (shadow soft cherry-500/20) */}
+                  <a
+                    href={order.payment.payment_url}
+                    target="_blank"
+                    rel="noopener"
+                    className="w-full h-12 rounded-xl inline-flex items-center justify-center gap-2 text-sm font-black text-white bg-gradient-to-r from-cherry-500 to-cherry-600 hover:from-cherry-600 hover:to-cherry-700 shadow-lg shadow-cherry-500/20 active:scale-[0.98] transition-transform"
+                  >
+                    <CreditCard size={16} aria-hidden="true" />
+                    Bayar Sekarang
+                  </a>
+                  {/* Secondary — text link below, sama pattern dengan
+                      "Nanti Saja" di modal (tanpa border, muted text) */}
+                  <div className="flex items-center justify-center gap-4 mt-3">
                     <button
                       type="button"
                       onClick={doRetryPayment}
                       disabled={retrying}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-cherry-600 border border-cherry-200 bg-white hover:bg-cherry-50 disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-ink-500 hover:text-cherry-600 disabled:opacity-40"
                     >
                       {retrying ? (
                         <>
@@ -367,25 +371,22 @@ export function PesananDetail() {
                           Memuat…
                         </>
                       ) : (
-                        <>
-                          <Copy size={12} aria-hidden="true" />
-                          Link Kadaluarsa? Buat Ulang
-                        </>
+                        "Link kadaluarsa? Buat ulang"
                       )}
                     </button>
+                    <span className="text-ink-300" aria-hidden="true">·</span>
                     <button
                       type="button"
                       onClick={() => setCancelOpen(true)}
                       disabled={cancelling}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-ink-500 hover:text-cherry-600 hover:bg-cherry-50 disabled:opacity-40"
+                      className="text-xs font-bold text-ink-500 hover:text-cherry-600 disabled:opacity-40"
                     >
-                      <X size={12} aria-hidden="true" />
-                      Batalkan Pesanan
+                      Batalkan pesanan
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="mt-2 text-xs text-ink-700 leading-relaxed">
+                <div className="mt-3 text-xs text-ink-700 leading-relaxed">
                   <p className="mb-1">
                     Transfer ke rekening toko Bu Santi kemudian hubungi admin untuk konfirmasi.
                   </p>
@@ -396,10 +397,9 @@ export function PesananDetail() {
                     type="button"
                     onClick={() => setCancelOpen(true)}
                     disabled={cancelling}
-                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-ink-500 hover:text-cherry-600 hover:bg-cherry-50 disabled:opacity-40"
+                    className="mt-3 text-xs font-bold text-ink-500 hover:text-cherry-600 disabled:opacity-40"
                   >
-                    <X size={12} aria-hidden="true" />
-                    Batalkan Pesanan
+                    Batalkan pesanan
                   </button>
                 </div>
               )}

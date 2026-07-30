@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { Package, ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 
 // Swipeable product gallery — pattern e-commerce standar:
 // - Main image (aspect-square) dengan scroll snap horizontal untuk swipe di
@@ -23,6 +23,8 @@ export function ProductGallery({
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  // Sprint 2 #9 — lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   // Track scroll position → highlight thumb aktif + hide arrow at edges.
   useEffect(() => {
@@ -63,9 +65,12 @@ export function ProductGallery({
           aria-label="Foto produk (geser untuk melihat lain)"
         >
           {images.map((src, i) => (
-            <div
+            <button
               key={src + i}
-              className="snap-start shrink-0 w-full aspect-square flex items-center justify-center"
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              aria-label="Perbesar foto"
+              className="snap-start shrink-0 w-full aspect-square flex items-center justify-center relative group"
             >
               {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <img
@@ -74,7 +79,11 @@ export function ProductGallery({
                 className="w-full h-full object-cover"
                 loading={i === 0 ? "eager" : "lazy"}
               />
-            </div>
+              {/* Hover hint zoom (desktop) */}
+              <span className="hidden sm:flex absolute bottom-3 right-3 w-9 h-9 rounded-full bg-white/90 text-ink-700 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                <ZoomIn size={16} aria-hidden="true" />
+              </span>
+            </button>
           ))}
         </div>
 
@@ -145,6 +154,148 @@ export function ProductGallery({
               {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <img src={src} alt="" className="w-full h-full object-cover" />
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* Lightbox fullscreen (Sprint 2 #9) — pinch-zoom via touch-action.
+          Sync activeIndex ke initial state — customer buka lightbox dari
+          gambar keberapa saja. */}
+      {lightboxOpen && (
+        <ImageLightbox
+          images={images}
+          alt={alt}
+          initialIndex={activeIndex}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── ImageLightbox ────────────────────────────────────────────────────
+// Fullscreen viewer — swipe/arrow untuk navigate + native pinch-zoom via
+// touch-action + click backdrop/X untuk close. Sengaja simple (no library)
+// karena Tailwind cukup + pinch native di Chrome/Safari sudah smooth.
+
+function ImageLightbox({
+  images,
+  alt,
+  initialIndex,
+  onClose,
+}: {
+  images: string[];
+  alt: string;
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(initialIndex);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
+      if (e.key === "ArrowRight") setIndex((i) => Math.min(images.length - 1, i + 1));
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [images.length, onClose]);
+
+  // Scroll ke slide sesuai index (untuk arrow nav + initial mount)
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: index * el.clientWidth, behavior: "smooth" });
+  }, [index]);
+
+  const hasMultiple = images.length > 1;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-ink-900/95 flex flex-col modal-fade-in"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
+        <span className="text-white/70 text-sm font-bold">
+          {hasMultiple ? `${index + 1} / ${images.length}` : ""}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Tutup"
+          className="w-11 h-11 rounded-full flex items-center justify-center text-white hover:bg-white/10"
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Scrollable images — snap horizontal + native pinch-zoom */}
+      <div
+        ref={scrollerRef}
+        className="flex-1 overflow-x-auto snap-x snap-mandatory flex scrollbar-hide"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const i = Math.round(el.scrollLeft / el.clientWidth);
+          if (i !== index) setIndex(i);
+        }}
+      >
+        {images.map((src, i) => (
+          <div
+            key={src + i}
+            className="snap-start shrink-0 w-full h-full flex items-center justify-center overflow-auto"
+            style={{ touchAction: "pinch-zoom" }}
+          >
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <img
+              src={src}
+              alt={`${alt} — foto ${i + 1}`}
+              className="max-w-full max-h-full object-contain select-none"
+              draggable={false}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Nav arrows desktop */}
+      {hasMultiple && index > 0 && (
+        <button
+          type="button"
+          onClick={() => setIndex(index - 1)}
+          aria-label="Foto sebelumnya"
+          className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 backdrop-blur text-white items-center justify-center hover:bg-white/20"
+        >
+          <ChevronLeft size={22} aria-hidden="true" />
+        </button>
+      )}
+      {hasMultiple && index < images.length - 1 && (
+        <button
+          type="button"
+          onClick={() => setIndex(index + 1)}
+          aria-label="Foto berikutnya"
+          className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 backdrop-blur text-white items-center justify-center hover:bg-white/20"
+        >
+          <ChevronRight size={22} aria-hidden="true" />
+        </button>
+      )}
+
+      {/* Dot indicator mobile */}
+      {hasMultiple && (
+        <div className="sm:hidden flex items-center justify-center gap-1.5 py-4 shrink-0">
+          {images.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? "bg-white w-4" : "bg-white/40 w-1.5"
+              }`}
+              aria-hidden="true"
+            />
           ))}
         </div>
       )}
