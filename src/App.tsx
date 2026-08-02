@@ -24,6 +24,9 @@ import { AdminReview } from "@/pages/AdminReview";
 import { AdminCustomers } from "@/pages/AdminCustomers";
 import { AdminPesananPrint } from "@/pages/AdminPesananPrint";
 import { AdminEcomSettings } from "@/pages/AdminEcomSettings";
+import { AdminBroadcasts } from "@/pages/AdminBroadcasts";
+import { AdminAnalytics } from "@/pages/AdminAnalytics";
+import { AdminActivityLog } from "@/pages/AdminActivityLog";
 import { Profil } from "@/pages/Profil";
 import { LupaPassword } from "@/pages/LupaPassword";
 import { Wishlist } from "@/pages/Wishlist";
@@ -85,6 +88,9 @@ export default function App() {
       <Route path="/admin/ulasan" element={<AdminReview />} />
       <Route path="/admin/customers" element={<AdminCustomers />} />
       <Route path="/admin/pengaturan" element={<AdminEcomSettings />} />
+      <Route path="/admin/broadcast" element={<AdminBroadcasts />} />
+      <Route path="/admin/laporan" element={<AdminAnalytics />} />
+      <Route path="/admin/aktivitas" element={<AdminActivityLog />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

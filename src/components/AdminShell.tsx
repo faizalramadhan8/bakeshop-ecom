@@ -17,7 +17,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Package, Tag, Ticket, ShoppingCart,
   MessageSquare, Star, Users, TrendingUp, Settings,
-  LogOut, Menu, X, ChevronRight, ArrowLeftRight,
+  LogOut, Menu, X, ChevronRight, ArrowLeftRight, Bell, History,
 } from "lucide-react";
 import { setToken, decodeToken, adminApi, type EcomAdminDashboardStats } from "@/lib/api";
 
@@ -38,7 +38,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/admin/customers", icon: <Users size={18} />, label: "Customer" },
   { to: "/admin/komplain", icon: <MessageSquare size={18} />, label: "Komplain", badgeKey: "complaints" },
   { to: "/admin/ulasan", icon: <Star size={18} />, label: "Ulasan" },
+  { to: "/admin/broadcast", icon: <Bell size={18} />, label: "Broadcast" },
   { to: "/admin/laporan", icon: <TrendingUp size={18} />, label: "Laporan" },
+  { to: "/admin/aktivitas", icon: <History size={18} />, label: "Aktivitas" },
   { to: "/admin/pengaturan", icon: <Settings size={18} />, label: "Pengaturan" },
 ];
 

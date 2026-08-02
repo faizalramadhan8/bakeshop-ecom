@@ -18,6 +18,14 @@ export interface PublicSettings {
   store_name: string;
   payment_pg_enabled: boolean;
   payment_manual_enabled: boolean;
+  // Sprint 5 Chunk 7 — Homepage CMS
+  hero_kicker?: string;
+  hero_title?: string;
+  hero_subtitle?: string;
+  hero_cta_label?: string;
+  hero_cta_url?: string;
+  pinned_product_ids?: string[];
+  featured_category_ids?: string[];
 }
 
 const CACHE_KEY = "bakeshop-public-settings";

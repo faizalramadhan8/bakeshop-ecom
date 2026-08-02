@@ -196,6 +196,37 @@ export const adminApi = {
   updateSettings: (patch: Partial<EcomSettings>) =>
     request<EcomSettings>("PATCH", "/ecom/admin/settings", patch, "admin"),
 
+  // Sprint 5 Chunk 6 (2 Aug 2026) — Broadcast push.
+  sendBroadcast: (data: { title: string; body: string; url?: string }) =>
+    request<EcomBroadcastResponse>("POST", "/ecom/admin/broadcasts", data, "admin"),
+  listBroadcasts: () =>
+    request<EcomBroadcastResponse[]>("GET", "/ecom/admin/broadcasts", undefined, "admin"),
+
+  // Sprint 5 Chunk 8 (2 Aug 2026) — Analytics deep.
+  getAnalytics: () =>
+    request<EcomAdminAnalytics>("GET", "/ecom/admin/analytics", undefined, "admin"),
+
+  // Sprint 5 Chunk 9 (2 Aug 2026) — Activity log.
+  // Sprint 5 Chunk 10 (2 Aug 2026) — Bulk product ops.
+  bulkProductOps: (
+    action: "publish" | "unpublish" | "sync_price" | "reset_price",
+    productIDs: string[],
+  ) =>
+    request<{ affected_count: number; skipped_count: number }>(
+      "POST", "/ecom/admin/products/bulk",
+      { action, product_ids: productIDs }, "admin"
+    ),
+
+  listActivity: (params: { action?: string; admin_id?: string; search?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.action && params.action !== "all") q.set("action", params.action);
+    if (params.admin_id) q.set("admin_id", params.admin_id);
+    if (params.search) q.set("search", params.search);
+    if (params.limit) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<EcomActivityLogRow[]>("GET", `/ecom/admin/activity${suffix}`, undefined, "admin");
+  },
+
   // Sprint 5 — Voucher CRUD.
   listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),
   createVoucher: (data: VoucherPayload) =>
@@ -852,6 +883,65 @@ export interface EcomSettings {
   payment_pg_enabled: boolean;
   payment_manual_enabled: boolean;
   notif_order_email_enabled: boolean;
+  // Sprint 5 Chunk 7 — Homepage CMS
+  hero_kicker?: string;
+  hero_title?: string;
+  hero_subtitle?: string;
+  hero_cta_label?: string;
+  hero_cta_url?: string;
+  pinned_product_ids?: string[];
+  featured_category_ids?: string[];
+}
+
+// Sprint 5 Chunk 6 — Broadcast push types.
+export interface EcomBroadcastResponse {
+  id: string;
+  title: string;
+  body: string;
+  url?: string;
+  delivered_count: number;
+  failed_count: number;
+  total_subscribers: number;
+  sent_by: string;
+  sent_by_name?: string;
+  sent_at: string;
+}
+
+// Sprint 5 Chunk 8 — Analytics types.
+export interface AnalyticsDailyBucket {
+  date: string;
+  revenue: number;
+  orders: number;
+}
+export interface AnalyticsChannelSlice {
+  method: string;
+  count: number;
+  amount: number;
+}
+export interface EcomAdminAnalytics {
+  range_from: string;
+  range_to: string;
+  total_orders: number;
+  completed_count: number;
+  total_revenue: number;
+  avg_order_value: number;
+  conversion_rate: number;
+  cancel_rate: number;
+  daily_revenue: AnalyticsDailyBucket[];
+  funnel: Record<string, number>;
+  payment_channels: AnalyticsChannelSlice[];
+}
+
+// Sprint 5 Chunk 9 — Activity log types.
+export interface EcomActivityLogRow {
+  id: string;
+  admin_id: string;
+  admin_name?: string;
+  action: string;
+  target?: string;
+  description: string;
+  meta?: string; // raw JSON string from BE
+  created_at: string;
 }
 
 export interface EcomLowStockItem {

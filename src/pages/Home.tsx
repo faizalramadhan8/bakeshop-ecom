@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Truck, ShieldCheck, Package as PackageIcon, ArrowRight } from "lucide-react";
 import { publicApi, type EcomCategory, type EcomProductListItem } from "@/lib/api";
 import { ProductCard } from "@/components/ProductCard";
@@ -7,11 +7,16 @@ import { BakeryLogo } from "@/components/BakeryLogo";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { useSEO } from "@/lib/seo";
 import { loadRecent } from "@/lib/recentlyViewed";
+import { usePublicSettings } from "@/lib/publicSettings";
 
 export function Home() {
   useSEO({}); // default title/desc dari template
+  const settings = usePublicSettings();
   const [categories, setCategories] = useState<EcomCategory[]>([]);
   const [featured, setFeatured] = useState<EcomProductListItem[]>([]);
+  // Sprint 5 Chunk 7 — pinned products (admin-curated). Kalau kosong,
+  // fallback ke `featured` (latest 8 auto).
+  const [pinnedProducts, setPinnedProducts] = useState<EcomProductListItem[]>([]);
   // Sprint 3 #15 — recently viewed
   const [recentProducts, setRecentProducts] = useState<EcomProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +41,37 @@ export function Home() {
     };
   }, []);
 
+  // Sprint 5 Chunk 7 — fetch pinned products (parallel best-effort).
+  useEffect(() => {
+    const pinned = settings.pinned_product_ids || [];
+    if (pinned.length === 0) {
+      setPinnedProducts([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(pinned.map((id) => publicApi.getProduct(id).catch(() => null)))
+      .then((results) => {
+        if (cancelled) return;
+        setPinnedProducts(results.filter((p): p is EcomProductListItem => p !== null));
+      });
+    return () => { cancelled = true; };
+  }, [settings.pinned_product_ids?.join(",")]);
+
+  // Filter kategori berdasarkan featured_category_ids kalau admin curate.
+  // Kalau kosong, tampilkan semua (behavior lama).
+  const displayCategories = useMemo(() => {
+    const featuredIDs = settings.featured_category_ids || [];
+    if (featuredIDs.length === 0) return categories;
+    const idSet = new Set(featuredIDs);
+    // Preserve order dari featuredIDs (admin's curated ranking).
+    const catById = new Map(categories.map((c) => [c.id, c]));
+    return featuredIDs.map((id) => catById.get(id)).filter((c): c is EcomCategory => !!c);
+  }, [categories, settings.featured_category_ids?.join(",")]);
+
+  // Effective featured list: pinned kalau ada, else auto-latest.
+  const displayFeatured = pinnedProducts.length > 0 ? pinnedProducts : featured;
+  const featuredHeading = pinnedProducts.length > 0 ? "Pilihan Bu Santi" : "Terbaru";
+
   // Sprint 3 #15 — load recently viewed produk. Fetch parallel per ID
   // (best-effort). Skip yang gagal fetch (produk mungkin sudah tidak tersedia).
   useEffect(() => {
@@ -57,22 +93,22 @@ export function Home() {
       <section className="bg-gradient-to-br from-cherry-100 via-cherry-50 to-cherry-100 border-b border-cherry-100">
         <div className="max-w-6xl mx-auto px-4 py-6 sm:py-10 flex items-center gap-4">
           <div className="flex-1 min-w-0">
+            {/* Hero content — admin-editable via /admin/pengaturan → tab Homepage.
+                Fallback ke default hardcoded kalau setting kosong. */}
             <p className="text-xs font-bold uppercase tracking-widest text-cherry-500 mb-1">
-              Promo Bulan Ini
+              {settings.hero_kicker || "Promo Bulan Ini"}
             </p>
-            <h1 className="text-xl sm:text-3xl font-black tracking-tight text-ink-900 leading-tight mb-2">
-              Bahan Kue Lengkap
-              <br />
-              Kirim Seluruh Indonesia
+            <h1 className="text-xl sm:text-3xl font-black tracking-tight text-ink-900 leading-tight mb-2 whitespace-pre-line">
+              {settings.hero_title || "Bahan Kue Lengkap\nKirim Seluruh Indonesia"}
             </h1>
             <p className="text-sm text-ink-700 mb-4">
-              Belanja mudah, harga grosir, stok fresh.
+              {settings.hero_subtitle || "Belanja mudah, harga grosir, stok fresh."}
             </p>
             <Link
-              to="/kategori"
+              to={settings.hero_cta_url || "/kategori"}
               className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 transition-opacity"
             >
-              Mulai Belanja
+              {settings.hero_cta_label || "Mulai Belanja"}
               <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </div>
@@ -108,13 +144,13 @@ export function Home() {
                 <div key={i} className="aspect-square bg-cherry-50 rounded-2xl animate-pulse" />
               ))}
             </div>
-          ) : categories.length === 0 ? (
+          ) : displayCategories.length === 0 ? (
             <div className="py-8 text-center text-ink-500">
               <p className="text-sm">Kategori belum tersedia. Cek lagi sebentar lagi ya.</p>
             </div>
           ) : (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
-              {categories.slice(0, 12).map((c) => (
+              {displayCategories.slice(0, 12).map((c) => (
                 <Link
                   key={c.id}
                   to={`/kategori/${c.id}`}
@@ -155,7 +191,7 @@ export function Home() {
       <section className="py-6 border-t border-cherry-100">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-black text-ink-900">Produk Terbaru</h2>
+            <h2 className="text-base font-black text-ink-900">{featuredHeading}</h2>
             <Link
               to="/kategori"
               className="text-sm font-bold text-cherry-500 hover:text-cherry-600 inline-flex items-center gap-1"
@@ -173,7 +209,7 @@ export function Home() {
                 />
               ))}
             </div>
-          ) : featured.length === 0 ? (
+          ) : displayFeatured.length === 0 ? (
             <div className="py-10 text-center">
               <div className="w-16 h-16 rounded-full bg-cherry-50 mx-auto mb-3 flex items-center justify-center">
                 <PackageIcon size={30} className="text-cherry-300" aria-hidden="true" />
@@ -185,7 +221,7 @@ export function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {featured.map((p) => (
+              {displayFeatured.map((p) => (
                 <ProductCard key={p.id} p={p} />
               ))}
             </div>
