@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
-  ArrowLeft, AlertCircle, MessageSquare, Check, X, Loader2, Clock,
+  AlertCircle, MessageSquare, Check, X, Loader2, Clock, Wallet,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { adminApi, decodeToken, type ComplaintAdmin } from "@/lib/api";
+import {
+  adminApi, decodeToken,
+  type ComplaintAdmin, type RefundMethod,
+} from "@/lib/api";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -68,24 +71,10 @@ export function AdminKomplain() {
   ];
 
   return (
-    <main className="min-h-screen p-4 sm:p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <Link
-          to="/admin"
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50"
-          aria-label="Kembali"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-black text-ink-900">Komplain Customer</h1>
-          <p className="text-xs text-ink-500 mt-0.5">
-            Balas keluhan dari customer supaya diselesaikan cepat.
-          </p>
-        </div>
-      </div>
-
+    <AdminShell
+      title="Moderasi Komplain"
+      subtitle="Balas keluhan dari customer supaya diselesaikan cepat."
+    >
       {/* Filter chips */}
       <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1">
         {filters.map((f) => {
@@ -186,7 +175,7 @@ export function AdminKomplain() {
           onSaved={() => { setReplying(null); load(); }}
         />
       )}
-    </main>
+    </AdminShell>
   );
 }
 
@@ -206,6 +195,14 @@ function ReplyModal({
   );
   const [submitting, setSubmitting] = useState(false);
 
+  // Sprint 4 Chunk 2 — refund panel, hanya muncul saat status resolved.
+  // Toggle opt-in supaya Bu Santi tidak "wajib" isi refund tiap resolve komplain
+  // (mis. komplain "kurir lama" — dibalas tapi tidak perlu refund).
+  const [refundEnabled, setRefundEnabled] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundMethod, setRefundMethod] = useState<RefundMethod>("transfer_bank");
+  const [refundNote, setRefundNote] = useState("");
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !submitting && onClose();
     document.addEventListener("keydown", onKey);
@@ -221,10 +218,40 @@ function ReplyModal({
       toast.error("Balasan minimal 5 karakter");
       return;
     }
+    // Validasi refund kalau enabled — cegah submit dengan data setengah.
+    if (status === "resolved" && refundEnabled) {
+      const amt = Number(refundAmount);
+      if (!amt || amt <= 0) {
+        toast.error("Nominal refund wajib diisi dan lebih dari 0");
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       await adminApi.replyComplaint(complaint.id, { reply: reply.trim(), status });
-      toast.success("Balasan tersimpan");
+      // Kalau enabled + resolved → juga record refund.
+      // Order sequence: reply dulu (idempotent PATCH), baru refund. Kalau
+      // refund gagal, reply tetap tersimpan — user bisa retry refund manual
+      // dari halaman order detail nanti.
+      if (status === "resolved" && refundEnabled) {
+        try {
+          await adminApi.createRefund({
+            order_id: complaint.order_id,
+            complaint_id: complaint.id,
+            amount: Number(refundAmount),
+            method: refundMethod,
+            note: refundNote.trim() || undefined,
+          });
+          toast.success("Balasan + refund tersimpan");
+        } catch (err) {
+          toast.error(
+            "Balasan tersimpan, tapi refund gagal: " +
+            (err instanceof Error ? err.message : "unknown")
+          );
+        }
+      } else {
+        toast.success("Balasan tersimpan");
+      }
       onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal simpan");
@@ -325,6 +352,92 @@ function ReplyModal({
             className="w-full px-3 py-2.5 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400 resize-none"
           />
           <p className="text-xs text-ink-500 mt-1 text-right">{reply.length} / 1000</p>
+
+          {/* Refund panel — muncul hanya saat status resolved. */}
+          {status === "resolved" && (
+            <div className="mt-4 rounded-xl border border-cherry-200 bg-cherry-50/40 p-4">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={refundEnabled}
+                  onChange={(e) => setRefundEnabled(e.target.checked)}
+                  disabled={submitting}
+                  className="mt-0.5 w-4 h-4 accent-cherry-500"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black text-ink-900 flex items-center gap-1.5">
+                    <Wallet size={14} className="text-cherry-500" aria-hidden="true" />
+                    Catat refund untuk komplain ini
+                  </p>
+                  <p className="text-xs text-ink-500 mt-0.5">
+                    Transfer dana ke customer secara manual, lalu catat di sini untuk
+                    audit. Restock manual via <b>Sesuaikan Stok</b> di halaman produk.
+                  </p>
+                </div>
+              </label>
+
+              {refundEnabled && (
+                <div className="mt-4 pl-6 flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-ink-500 mb-1 block">
+                      Nominal Refund (Rp) *
+                    </label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      disabled={submitting}
+                      placeholder="0"
+                      className="w-full h-11 px-3 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-ink-500 mb-1 block">
+                      Metode Refund
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {([
+                        { key: "transfer_bank" as const, label: "Transfer Bank" },
+                        { key: "ewallet"       as const, label: "E-Wallet" },
+                        { key: "cash"          as const, label: "Tunai" },
+                        { key: "voucher"       as const, label: "Voucher" },
+                        { key: "other"         as const, label: "Lainnya" },
+                      ]).map((m) => (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => setRefundMethod(m.key)}
+                          disabled={submitting}
+                          className={`px-3 h-8 rounded-full text-xs font-bold border ${
+                            refundMethod === m.key
+                              ? "bg-cherry-500 border-cherry-500 text-white"
+                              : "bg-white border-cherry-200 text-ink-700 hover:bg-cherry-50"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-ink-500 mb-1 block">
+                      Catatan (opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={refundNote}
+                      onChange={(e) => setRefundNote(e.target.value)}
+                      disabled={submitting}
+                      placeholder="Contoh: BCA 1234, bukti tf 31 Jul"
+                      maxLength={500}
+                      className="w-full h-11 px-3 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

@@ -170,6 +170,32 @@ export const adminApi = {
   dispatchRestockNotif: (productID: string) =>
     request<null>("POST", `/ecom/admin/products/${productID}/dispatch-restock`, {}, "admin"),
 
+  // Sprint 4 Chunk 1 (30 Jul 2026) — Customer management.
+  listCustomers: (params: { search?: string; page?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.search) q.set("search", params.search);
+    if (params.page) q.set("page", String(params.page));
+    if (params.limit) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<EcomAdminCustomerListResponse>("GET", `/ecom/admin/customers${suffix}`, undefined, "admin");
+  },
+  getCustomer: (id: string) =>
+    request<EcomAdminCustomerDetail>("GET", `/ecom/admin/customers/${id}`, undefined, "admin"),
+  setCustomerActive: (id: string, isActive: boolean) =>
+    request<null>("PATCH", `/ecom/admin/customers/${id}/active`, { is_active: isActive }, "admin"),
+
+  // Sprint 4 Chunk 2 (31 Jul 2026) — Refund flow.
+  createRefund: (data: EcomRefundCreatePayload) =>
+    request<EcomRefundResponse>("POST", "/ecom/admin/refunds", data, "admin"),
+  listRefundsByOrder: (orderID: string) =>
+    request<EcomRefundResponse[]>("GET", `/ecom/admin/orders/${orderID}/refunds`, undefined, "admin"),
+
+  // Sprint 4 Chunk 5 (31 Jul 2026) — Ecom settings.
+  getSettings: () =>
+    request<EcomSettings>("GET", "/ecom/admin/settings", undefined, "admin"),
+  updateSettings: (patch: Partial<EcomSettings>) =>
+    request<EcomSettings>("PATCH", "/ecom/admin/settings", patch, "admin"),
+
   // Sprint 5 — Voucher CRUD.
   listVouchers: () => request<VoucherAdmin[]>("GET", "/ecom/admin/vouchers", undefined, "admin"),
   createVoucher: (data: VoucherPayload) =>
@@ -746,6 +772,86 @@ export interface EcomAdminDashboardStats {
   total_customers: number;
   complaints_pending: number;
   low_stock_count: number;
+}
+
+// Sprint 4 Chunk 1 (30 Jul 2026) — Customer management types.
+export interface EcomAdminCustomerListItem {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  is_active: boolean;
+  order_count: number;
+  total_spent: number;
+  last_order_date: string | null;
+  created_at: string;
+}
+export interface EcomAdminCustomerListResponse {
+  items: EcomAdminCustomerListItem[];
+  next_cursor: string;
+  total: number;
+}
+export interface EcomAdminCustomerOrderRow {
+  id: string;
+  created_at: string;
+  status: string;
+  total: number;
+  item_count: number;
+}
+export interface EcomAdminCustomerDetail extends EcomAdminCustomerListItem {
+  recent_orders: EcomAdminCustomerOrderRow[];
+  address_count: number;
+  avg_order_value: number;
+  completed_count: number;
+  pending_count: number;
+  cancelled_count: number;
+}
+
+// Sprint 4 Chunk 2 — Refund types.
+export type RefundMethod = "transfer_bank" | "ewallet" | "cash" | "voucher" | "other";
+export interface RefundRestockItem {
+  product_id: string;
+  qty: number;
+}
+export interface EcomRefundCreatePayload {
+  order_id: string;
+  complaint_id?: string;
+  amount: number;
+  method: RefundMethod;
+  note?: string;
+  restock_items?: RefundRestockItem[];
+}
+export interface EcomRefundResponse {
+  id: string;
+  order_id: string;
+  complaint_id?: string;
+  amount: number;
+  method: RefundMethod;
+  note?: string;
+  restocked_items: RefundRestockItem[];
+  refunded_by: string;
+  refunded_by_name?: string;
+  refunded_at: string;
+}
+
+// Sprint 4 Chunk 5 — Ecom settings type (singleton, id='default').
+export interface EcomSettings {
+  id: string;
+  min_order_amount: number;
+  wa_contact_number: string;
+  wa_pretext?: string;
+  announcement_bar_enabled: boolean;
+  announcement_bar_text?: string;
+  announcement_bar_cta_label?: string;
+  announcement_bar_cta_url?: string;
+  store_name: string;
+  store_email?: string;
+  store_pickup_address?: string;
+  store_pickup_phone?: string;
+  store_pickup_area_id?: string;
+  payment_pg_enabled: boolean;
+  payment_manual_enabled: boolean;
+  notif_order_email_enabled: boolean;
 }
 
 export interface EcomLowStockItem {

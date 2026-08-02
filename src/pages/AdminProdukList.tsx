@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Search, Package, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
+import { Search, Package, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { adminApi, decodeToken, type EcomAdminProduct } from "@/lib/api";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -44,25 +45,11 @@ export function AdminProdukList() {
   }, [search]);
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="max-w-5xl mx-auto">
-        {/* Header consistent dengan AdminKomplain: back icon-only + heading + subtitle inline */}
-        <div className="flex items-center gap-3 mb-5">
-          <Link
-            to="/admin"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50"
-            aria-label="Kembali"
-          >
-            <ArrowLeft size={18} />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-black text-ink-900">Produk Online</h1>
-            <p className="text-xs text-ink-500 mt-0.5">
-              Publish produk ke storefront + manage stok dan harga online.
-            </p>
-          </div>
-        </div>
-
+    <AdminShell
+      title="Produk Online"
+      subtitle="Publish produk ke storefront + manage stok dan harga online"
+    >
+      <div>
         <div className="relative mb-3">
           <Search
             size={18}
@@ -190,6 +177,6 @@ export function AdminProdukList() {
           );
         })()}
       </div>
-    </main>
+    </AdminShell>
   );
 }

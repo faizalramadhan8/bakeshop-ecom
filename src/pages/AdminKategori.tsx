@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Edit3, X, Save, Loader2, Package } from "lucide-react";
+import { Plus, Trash2, Edit3, X, Save, Loader2, Package } from "lucide-react";
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomCategoryAdmin } from "@/lib/api";
 import { CATEGORY_ICONS, CATEGORY_ICON_NAMES, CategoryIcon } from "@/components/CategoryIcon";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -111,32 +111,20 @@ export function AdminKategori() {
   };
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="max-w-3xl mx-auto">
-        {/* Header consistent: back icon-only + heading + subtitle + CTA */}
-        <div className="flex items-center gap-3 mb-5">
-          <Link
-            to="/admin"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 shrink-0"
-            aria-label="Kembali"
-          >
-            <ArrowLeft size={18} />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-black text-ink-900">Kategori Ecommerce</h1>
-            <p className="text-xs text-ink-500 mt-0.5">
-              Kelompok produk yang tampil di storefront. Terpisah dari kategori POS.
-            </p>
-          </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 shrink-0"
-          >
-            <Plus size={14} />
-            Tambah
-          </button>
-        </div>
-
+    <AdminShell
+      title="Kategori Ecommerce"
+      subtitle="Kelompok produk yang tampil di storefront. Terpisah dari kategori POS."
+      headerRight={
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-1.5 px-4 h-10 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 hover:opacity-90 shrink-0"
+        >
+          <Plus size={14} />
+          Tambah
+        </button>
+      }
+    >
+      <div className="max-w-3xl">
         {showForm && (
           <div className="mb-4 bg-white border border-cherry-200 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3">
@@ -337,6 +325,6 @@ export function AdminKategori() {
           </div>
         )}
       </div>
-    </main>
+    </AdminShell>
   );
 }

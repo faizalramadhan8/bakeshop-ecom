@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
-  ArrowLeft, Star, Eye, EyeOff, Loader2, MessageSquare, Search,
+  Star, Eye, EyeOff, Loader2, MessageSquare, Search,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type ReviewAdmin } from "@/lib/api";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -73,23 +73,10 @@ export function AdminReview() {
   };
 
   return (
-    <main className="min-h-screen p-4 sm:p-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3 mb-5">
-        <Link
-          to="/admin"
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50"
-          aria-label="Kembali"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-black text-ink-900">Moderasi Ulasan</h1>
-          <p className="text-xs text-ink-500 mt-0.5">
-            Sembunyikan ulasan yang mengandung ujaran kebencian, SARA, spam, atau tidak sesuai aturan.
-          </p>
-        </div>
-      </div>
-
+    <AdminShell
+      title="Moderasi Ulasan"
+      subtitle="Sembunyikan ulasan yang mengandung ujaran kebencian, SARA, spam, atau tidak sesuai aturan."
+    >
       {/* Filter + search */}
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <div className="flex gap-2">
@@ -260,6 +247,6 @@ export function AdminReview() {
           ))}
         </div>
       )}
-    </main>
+    </AdminShell>
   );
 }

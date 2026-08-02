@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Save, AlertCircle, Info, Upload, Camera, Image as ImageIcon, X, Loader2, Bell } from "lucide-react";
+import { Save, AlertCircle, Info, Upload, Camera, Image as ImageIcon, X, Loader2, Bell } from "lucide-react";
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomAdminProduct, type EcomCategoryAdmin } from "@/lib/api";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -165,27 +166,27 @@ export function AdminProdukEdit() {
 
   if (loading) {
     return (
-      <main className="min-h-screen p-6 text-center text-ink-500 text-sm">
-        <Loader2 size={20} className="animate-spin mx-auto mt-16 mb-2" />
-        Memuat produk…
-      </main>
+      <AdminShell title="Memuat produk…" parents={[{ label: "Produk", to: "/admin/produk" }]}>
+        <div className="text-center text-ink-500 text-sm py-16">
+          <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+          Memuat produk…
+        </div>
+      </AdminShell>
     );
   }
   if (error || !product) {
     return (
-      <main className="min-h-screen p-6">
-        <div className="max-w-2xl mx-auto text-center py-16">
-          <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" />
+      <AdminShell title="Produk tidak ditemukan" parents={[{ label: "Produk", to: "/admin/produk" }]}>
+        <div className="text-center py-16">
+          <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" aria-hidden="true" />
           <p className="text-sm font-semibold text-cherry-600">
             {error || "Produk tidak ditemukan"}
           </p>
-          <Link to="/admin/produk" className="inline-block mt-4 text-sm text-cherry-500 underline">
-            Kembali ke daftar produk
-          </Link>
         </div>
-      </main>
+      </AdminShell>
     );
   }
+  // Link import removed above; re-import for other in-body usages.
 
   const warnings: string[] = [];
   if (available && Number(stockEcom) === 0)
@@ -198,23 +199,12 @@ export function AdminProdukEdit() {
     );
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="max-w-2xl mx-auto">
-        {/* Header consistent: back icon-only + heading + subtitle */}
-        <div className="flex items-center gap-3 mb-5">
-          <Link
-            to="/admin/produk"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50 shrink-0"
-            aria-label="Kembali"
-          >
-            <ArrowLeft size={18} />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-black text-ink-900 truncate">{product.name}</h1>
-            <p className="text-xs text-ink-500 mt-0.5">SKU: {product.sku}</p>
-          </div>
-        </div>
-
+    <AdminShell
+      title={product.name}
+      subtitle={`SKU: ${product.sku}`}
+      parents={[{ label: "Produk", to: "/admin/produk" }]}
+    >
+      <div className="max-w-2xl">
         {warnings.length > 0 && (
           <div className="bg-amber-50 border border-amber-500/30 rounded-2xl p-4 mb-6">
             <p className="text-xs font-black uppercase tracking-wider text-amber-600 mb-2">
@@ -524,7 +514,7 @@ export function AdminProdukEdit() {
           </button>
         </div>
       </div>
-    </main>
+    </AdminShell>
   );
 }
 

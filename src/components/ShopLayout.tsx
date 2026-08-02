@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
 import { BottomNav } from "./BottomNav";
 import { FloatingWA } from "./FloatingWA";
+import { AnnouncementBar } from "./AnnouncementBar";
 import { decodeToken } from "@/lib/api";
 
 // Layout untuk semua public storefront routes: Header sticky + main + BottomNav.
@@ -40,6 +41,7 @@ export function ShopLayout() {
 
   return (
     <div className="min-h-screen flex flex-col pb-20 sm:pb-0">
+      <AnnouncementBar />
       <Header />
       <main className="flex-1">
         <Outlet />

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Package, ShoppingCart, Users, TrendingUp, LogOut, ArrowLeft, Tag, Ticket, MessageSquare, Star, AlertCircle } from "lucide-react";
-import { setToken, decodeToken, adminApi, formatRp, type EcomAdminDashboardStats } from "@/lib/api";
+import { Package, ShoppingCart, Users, TrendingUp, Tag, Ticket, MessageSquare, Star, AlertCircle, Settings } from "lucide-react";
+import { decodeToken, adminApi, formatRp, type EcomAdminDashboardStats } from "@/lib/api";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -12,8 +13,6 @@ export function AdminDashboard() {
       window.location.href = "/";
     }
   }, []);
-  const claims = decodeToken();
-  const isSuperadmin = claims?.role === "superadmin";
 
   // Sprint 3 #13 — Dashboard stats widget
   const [stats, setStats] = useState<EcomAdminDashboardStats | null>(null);
@@ -61,53 +60,22 @@ export function AdminDashboard() {
       desc: "Sembunyikan ulasan yang mengandung SARA, spam, atau tidak sesuai aturan",
     },
     {
-      to: "#",
+      to: "/admin/customers",
       icon: <Users size={20} />,
       title: "Customer",
-      desc: "Daftar customer registered + riwayat order",
-      disabled: true,
+      desc: "Daftar customer registered + riwayat order + block/unblock",
     },
     {
-      to: "#",
-      icon: <TrendingUp size={20} />,
-      title: "Laporan",
-      desc: "Revenue, conversion, top produk online",
-      disabled: true,
+      to: "/admin/pengaturan",
+      icon: <Settings size={20} />,
+      title: "Pengaturan",
+      desc: "Min order, kontak WA, announcement bar, metode pembayaran",
     },
   ];
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-black text-ink-900">Ecom Admin</h1>
-            <p className="text-sm text-ink-700 mt-0.5">Toko Bahan Kue Santi</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Superadmin: quick-jump ke POS admin. Bu Santi 21 Jul 2026. */}
-            {isSuperadmin && (
-              <button
-                onClick={() => { window.location.href = "/"; }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-cherry-200 text-ink-700 hover:bg-cherry-50 transition-colors"
-              >
-                <ArrowLeft size={14} />
-                POS Admin
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setToken(null);
-                window.location.href = "/";
-              }}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border border-cherry-200 text-ink-700 hover:bg-cherry-50 transition-colors"
-            >
-              <LogOut size={14} />
-              Keluar
-            </button>
-          </div>
-        </div>
-
+    <AdminShell title="Dashboard" subtitle="Ringkasan operasional storefront Toko Bahan Kue Santi">
+      <div>
         {/* Sprint 3 #13 — Widgets. status_counts + top_products defensively
             guarded — kalau BE belum deploy endpoint baru atau shape mismatch,
             block ini jangan sampai crash React (blank page insiden 30 Jul). */}
@@ -213,22 +181,14 @@ export function AdminDashboard() {
           {cards.map((c) => (
             <Link
               key={c.title}
-              to={c.disabled ? "#" : c.to}
-              onClick={(e) => c.disabled && e.preventDefault()}
-              className={`block bg-white rounded-2xl border p-5 transition-all ${
-                c.disabled
-                  ? "border-cherry-100 opacity-50 cursor-not-allowed"
-                  : "border-cherry-200 hover:border-cherry-400 hover:shadow-md"
-              }`}
+              to={c.to}
+              className="block bg-white rounded-2xl border border-cherry-200 p-5 transition-all hover:border-cherry-400 hover:shadow-md"
             >
               <div className="w-10 h-10 rounded-xl bg-cherry-100 text-cherry-500 flex items-center justify-center mb-3">
                 {c.icon}
               </div>
               <h2 className="text-base font-black text-ink-900 mb-1">{c.title}</h2>
               <p className="text-xs text-ink-700 leading-relaxed">{c.desc}</p>
-              {c.disabled && (
-                <p className="text-xs text-cherry-600 font-bold mt-2">Segera hadir</p>
-              )}
             </Link>
           ))}
         </div>
@@ -242,7 +202,7 @@ export function AdminDashboard() {
           </p>
         </div>
       </div>
-    </main>
+    </AdminShell>
   );
 }
 

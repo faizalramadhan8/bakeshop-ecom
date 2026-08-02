@@ -1,17 +1,18 @@
 // FloatingWA — floating button ke WhatsApp Bu Santi supaya customer cepat
 // tanya. Sprint 3 #12 (30 Jul 2026).
 //
-// Placement: bottom-right, di atas BottomNav (offset). Bubble message dengan
-// pre-filled context supaya Bu Santi tahu customer datang dari web.
+// Sprint 4 Chunk 5 (31 Jul 2026): nomor + pretext ambil dari BE settings
+// (bukan hardcoded). Kalau BE tidak reachable, fallback ke default hardcoded.
 
-// TODO: ganti dengan nomor Bu Santi asli (via env atau settings BE).
-// Untuk sekarang hardcoded — mirror pattern kontak admin di PesananDetail
-// ("WhatsApp 08123456789") yang juga hardcoded.
-const WA_NUMBER = "6281574273040";
-const WA_TEXT = "Halo Bu Santi, saya customer TBK Santi. Mau tanya...";
+import { usePublicSettings } from "@/lib/publicSettings";
 
 export function FloatingWA() {
-  const href = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(WA_TEXT)}`;
+  const settings = usePublicSettings();
+  // Kalau admin sengaja kosongkan nomor WA di settings, hide button.
+  if (!settings.wa_contact_number) return null;
+
+  const text = settings.wa_pretext || "Halo Bu Santi, saya customer TBK Santi. Mau tanya...";
+  const href = `https://wa.me/${settings.wa_contact_number}?text=${encodeURIComponent(text)}`;
   return (
     <a
       href={href}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  ArrowLeft, Package, MapPin, CreditCard, Truck, Copy, Check, X,
+  Package, MapPin, CreditCard, Truck, Copy, Check,
   AlertCircle, Loader2, PackageCheck, Ban, Undo, Zap, Info,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type CustomerOrderDetail } from "@/lib/api";
+import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -225,11 +226,18 @@ export function AdminPesananDetail() {
   };
 
   if (loading) {
-    return <main className="min-h-screen p-6 text-center text-ink-500 text-sm">Memuat…</main>;
+    return (
+      <AdminShell title="Memuat pesanan…" parents={[{ label: "Pesanan", to: "/admin/pesanan" }]}>
+        <div className="py-16 text-center text-ink-500 text-sm">
+          <Loader2 size={20} className="animate-spin mx-auto mb-2" aria-hidden="true" />
+          Memuat…
+        </div>
+      </AdminShell>
+    );
   }
   if (error || !order) {
     return (
-      <main className="min-h-screen p-6">
+      <AdminShell title="Pesanan tidak ditemukan" parents={[{ label: "Pesanan", to: "/admin/pesanan" }]}>
         <div className="max-w-2xl mx-auto text-center py-16">
           <AlertCircle size={40} className="mx-auto text-cherry-600 mb-3" aria-hidden="true" />
           <p className="text-sm font-semibold text-cherry-600">{error || "Order tidak ditemukan"}</p>
@@ -237,7 +245,7 @@ export function AdminPesananDetail() {
             Kembali ke daftar
           </Link>
         </div>
-      </main>
+      </AdminShell>
     );
   }
 
@@ -245,16 +253,11 @@ export function AdminPesananDetail() {
   const showResiButton = order.ecom_status === "paid" || order.ecom_status === "processing" || order.ecom_status === "shipped";
 
   return (
-    <main className="min-h-screen p-4 sm:p-6 pb-32">
-      <div className="max-w-3xl mx-auto">
-        <Link
-          to="/admin/pesanan"
-          className="inline-flex items-center gap-2 text-sm text-ink-700 hover:text-ink-900 mb-4"
-        >
-          <ArrowLeft size={16} aria-hidden="true" />
-          Daftar pesanan
-        </Link>
-
+    <AdminShell
+      title={`Pesanan #${order.id.slice(0, 8)}`}
+      parents={[{ label: "Pesanan", to: "/admin/pesanan" }]}
+    >
+      <div className="max-w-3xl pb-24">
         {/* Header */}
         <div className="bg-white border border-cherry-200 rounded-2xl p-5 mb-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -601,6 +604,6 @@ export function AdminPesananDetail() {
           </div>
         )}
       </div>
-    </main>
+    </AdminShell>
   );
 }

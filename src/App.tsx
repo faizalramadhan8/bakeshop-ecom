@@ -21,6 +21,9 @@ import { AdminPesananDetail } from "@/pages/AdminPesananDetail";
 import { AdminVoucher } from "@/pages/AdminVoucher";
 import { AdminKomplain } from "@/pages/AdminKomplain";
 import { AdminReview } from "@/pages/AdminReview";
+import { AdminCustomers } from "@/pages/AdminCustomers";
+import { AdminPesananPrint } from "@/pages/AdminPesananPrint";
+import { AdminEcomSettings } from "@/pages/AdminEcomSettings";
 import { Profil } from "@/pages/Profil";
 import { LupaPassword } from "@/pages/LupaPassword";
 import { Wishlist } from "@/pages/Wishlist";
@@ -74,10 +77,14 @@ export default function App() {
       <Route path="/admin/produk/:id" element={<AdminProdukEdit />} />
       <Route path="/admin/kategori" element={<AdminKategori />} />
       <Route path="/admin/pesanan" element={<AdminPesananList />} />
+      {/* Print route HARUS sebelum :id supaya "print" tidak ke-match sebagai order ID */}
+      <Route path="/admin/pesanan/print" element={<AdminPesananPrint />} />
       <Route path="/admin/pesanan/:id" element={<AdminPesananDetail />} />
       <Route path="/admin/voucher" element={<AdminVoucher />} />
       <Route path="/admin/komplain" element={<AdminKomplain />} />
       <Route path="/admin/ulasan" element={<AdminReview />} />
+      <Route path="/admin/customers" element={<AdminCustomers />} />
+      <Route path="/admin/pengaturan" element={<AdminEcomSettings />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
