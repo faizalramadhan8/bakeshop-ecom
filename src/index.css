@@ -75,3 +75,78 @@ input[type="number"] { -moz-appearance: textfield; }
 @media (prefers-reduced-motion: reduce) {
   .modal-fade-in, .modal-scale-in, .modal-sheet-in { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Dark mode admin — Sprint 6 Chunk 13 (4 Aug 2026).
+   Scoped ke admin only via [data-admin-theme="dark"] di <html>.
+   Hijack Tailwind atomic class via higher specificity — cegah harus
+   refactor tiap komponen ke dark: variant (invasif).
+
+   Palette dark warm (maroon-tinted supaya konsisten cherry brand,
+   bukan slate/neutral). Text pakai off-white supaya tidak silau.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root[data-admin-theme="dark"] {
+  color-scheme: dark;
+}
+:root[data-admin-theme="dark"] body {
+  background: #1a0d10;
+  color: #F5E6EA;
+}
+
+/* Surface backgrounds */
+:root[data-admin-theme="dark"] .bg-white         { background-color: #2a1518 !important; }
+:root[data-admin-theme="dark"] .bg-cherry-50     { background-color: #2f1a1e !important; }
+:root[data-admin-theme="dark"] .bg-cherry-50\/40 { background-color: #241012 !important; }
+:root[data-admin-theme="dark"] .bg-cherry-50\/50 { background-color: #291418 !important; }
+:root[data-admin-theme="dark"] .bg-cherry-50\/60 { background-color: #291418 !important; }
+:root[data-admin-theme="dark"] .bg-cherry-50\/70 { background-color: #2c1519 !important; }
+:root[data-admin-theme="dark"] .bg-cherry-100    { background-color: #3d1e24 !important; }
+
+/* Borders — sedikit lebih terang dari surface supaya kelihatan */
+:root[data-admin-theme="dark"] .border-cherry-100 { border-color: #3d1e24 !important; }
+:root[data-admin-theme="dark"] .border-cherry-200 { border-color: #4a2530 !important; }
+:root[data-admin-theme="dark"] .border-cherry-300 { border-color: #5a2f3c !important; }
+
+/* Text — warm off-white supaya keep brand feel */
+:root[data-admin-theme="dark"] .text-ink-900 { color: #F5E6EA !important; }
+:root[data-admin-theme="dark"] .text-ink-700 { color: #D4B5BC !important; }
+:root[data-admin-theme="dark"] .text-ink-500 { color: #A08088 !important; }
+
+/* Bg semi-transparent maroon supaya modal scrim tetap kelihatan gelap */
+:root[data-admin-theme="dark"] .bg-ink-900\/40 { background-color: rgba(0,0,0,0.65) !important; }
+:root[data-admin-theme="dark"] .bg-ink-900\/50 { background-color: rgba(0,0,0,0.7) !important; }
+:root[data-admin-theme="dark"] .bg-ink-900\/60 { background-color: rgba(0,0,0,0.75) !important; }
+
+/* Topbar backdrop — cegah stark white saat scroll */
+:root[data-admin-theme="dark"] .bg-white\/95 { background-color: rgba(42, 21, 24, 0.95) !important; }
+
+/* Input readability — dark surface + light text */
+:root[data-admin-theme="dark"] input,
+:root[data-admin-theme="dark"] textarea,
+:root[data-admin-theme="dark"] select {
+  background-color: #241012 !important;
+  color: #F5E6EA !important;
+}
+:root[data-admin-theme="dark"] input::placeholder,
+:root[data-admin-theme="dark"] textarea::placeholder {
+  color: #7a5c65 !important;
+}
+
+/* Amber/red/green surface tints — turunkan brightness supaya tidak silau */
+:root[data-admin-theme="dark"] .bg-amber-50  { background-color: #3a2810 !important; }
+:root[data-admin-theme="dark"] .bg-amber-100 { background-color: #4a3418 !important; }
+:root[data-admin-theme="dark"] .bg-red-50    { background-color: #3a1518 !important; }
+:root[data-admin-theme="dark"] .bg-red-100   { background-color: #4a1a20 !important; }
+:root[data-admin-theme="dark"] .bg-green-50  { background-color: #14301c !important; }
+:root[data-admin-theme="dark"] .bg-green-100 { background-color: #1c4028 !important; }
+:root[data-admin-theme="dark"] .bg-blue-50   { background-color: #142838 !important; }
+:root[data-admin-theme="dark"] .bg-purple-50 { background-color: #281838 !important; }
+:root[data-admin-theme="dark"] .border-amber-200 { border-color: #6b4a1c !important; }
+:root[data-admin-theme="dark"] .border-red-200   { border-color: #6b2530 !important; }
+:root[data-admin-theme="dark"] .border-green-200 { border-color: #2a5a3a !important; }
+
+/* Skeleton — dark gradient supaya kontras di dark surface */
+:root[data-admin-theme="dark"] .from-cherry-100,
+:root[data-admin-theme="dark"] .via-cherry-50,
+:root[data-admin-theme="dark"] .to-cherry-100 { background-color: transparent !important; }

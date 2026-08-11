@@ -18,8 +18,11 @@ import {
   LayoutDashboard, Package, Tag, Ticket, ShoppingCart,
   MessageSquare, Star, Users, TrendingUp, Settings,
   LogOut, Menu, X, ChevronRight, ArrowLeftRight, Bell, History,
+  Sun, Moon, Search,
 } from "lucide-react";
 import { setToken, decodeToken, adminApi, type EcomAdminDashboardStats } from "@/lib/api";
+import { useAdminTheme, clearAdminTheme } from "@/lib/adminTheme";
+import { CommandPalette } from "./CommandPalette";
 
 type NavItem = {
   to: string;
@@ -62,6 +65,7 @@ export function AdminShell({ title, subtitle, parents = [], headerRight, childre
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [stats, setStats] = useState<EcomAdminDashboardStats | null>(null);
   const loc = useLocation();
+  const [theme, , toggleTheme] = useAdminTheme();
 
   useEffect(() => {
     adminApi.getDashboardStats().then(setStats).catch(() => {});
@@ -69,6 +73,25 @@ export function AdminShell({ title, subtitle, parents = [], headerRight, childre
 
   // Tutup drawer setiap route change.
   useEffect(() => { setDrawerOpen(false); }, [loc.pathname]);
+
+  // Cleanup: kalau user leave admin (mis. logout redirect ke /), clear
+  // data-admin-theme dari <html> supaya storefront customer tidak dark.
+  useEffect(() => {
+    return () => clearAdminTheme();
+  }, []);
+
+  // Sprint 6 Chunk 14+15 — Command palette (Cmd/Ctrl+K).
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const claims = decodeToken();
   const isSuperadmin = claims?.role === "superadmin";
@@ -94,6 +117,8 @@ export function AdminShell({ title, subtitle, parents = [], headerRight, childre
           isSuperadmin={isSuperadmin}
           onLogout={handleLogout}
           currentPath={loc.pathname}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       </aside>
 
@@ -121,6 +146,8 @@ export function AdminShell({ title, subtitle, parents = [], headerRight, childre
               isSuperadmin={isSuperadmin}
               onLogout={handleLogout}
               currentPath={loc.pathname}
+              theme={theme}
+              onToggleTheme={toggleTheme}
             />
           </aside>
         </>
@@ -168,10 +195,36 @@ export function AdminShell({ title, subtitle, parents = [], headerRight, childre
               )}
             </div>
 
+            {/* Global search — Sprint 6 Chunk 14. Icon-only mobile, tombol
+                lengkap dengan hint Cmd+K di desktop. */}
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Cari (Cmd+K)"
+              title="Cari — Cmd+K"
+              className="shrink-0 hidden sm:flex items-center gap-2 h-10 pl-3 pr-2 rounded-xl border border-cherry-200 text-sm text-ink-500 hover:bg-cherry-50 hover:text-ink-700"
+            >
+              <Search size={14} aria-hidden="true" />
+              <span>Cari…</span>
+              <span className="hidden md:inline-flex items-center gap-0.5 ml-4 h-5 px-1.5 rounded border border-cherry-200 bg-cherry-50 font-mono text-[10px]">
+                ⌘K
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Cari"
+              className="shrink-0 sm:hidden w-10 h-10 rounded-xl flex items-center justify-center text-ink-700 hover:bg-cherry-50"
+            >
+              <Search size={18} />
+            </button>
+
             {/* Header CTA slot */}
             {headerRight && <div className="shrink-0">{headerRight}</div>}
           </div>
         </header>
+
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
         {/* Content */}
         <main className="flex-1 px-4 lg:px-8 py-6 max-w-7xl w-full">
@@ -194,9 +247,11 @@ interface SidebarContentProps {
   isSuperadmin: boolean;
   onLogout: () => void;
   currentPath: string;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 }
 
-function SidebarContent({ badges, isSuperadmin, onLogout, currentPath }: SidebarContentProps) {
+function SidebarContent({ badges, isSuperadmin, onLogout, currentPath, theme, onToggleTheme }: SidebarContentProps) {
   return (
     <>
       {/* Brand */}
@@ -240,8 +295,22 @@ function SidebarContent({ badges, isSuperadmin, onLogout, currentPath }: Sidebar
         })}
       </nav>
 
-      {/* Footer — POS jump + logout */}
+      {/* Footer — theme toggle + POS jump + logout */}
       <div className="p-3 border-t border-cherry-100 flex flex-col gap-1">
+        <button
+          onClick={onToggleTheme}
+          className="flex items-center gap-3 h-10 px-3 rounded-xl text-sm font-semibold text-ink-700 hover:bg-cherry-50 transition-colors"
+          title={theme === "dark" ? "Ganti ke tema terang" : "Ganti ke tema gelap"}
+        >
+          {theme === "dark" ? (
+            <Sun size={16} className="text-cherry-500" />
+          ) : (
+            <Moon size={16} className="text-ink-500" />
+          )}
+          <span className="flex-1 text-left">
+            {theme === "dark" ? "Tema Terang" : "Tema Gelap"}
+          </span>
+        </button>
         {isSuperadmin && (
           <button
             onClick={() => { window.location.href = "/"; }}

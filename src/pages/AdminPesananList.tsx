@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Package, RefreshCw, ChevronRight, Printer, X } from "lucide-react";
+import { Search, Package, RefreshCw, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
+import { exportOrdersXlsx } from "@/lib/export";
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomAdminOrderListItem } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
+import { useUrlQueryState } from "@/lib/useUrlQueryState";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -43,8 +45,10 @@ function statusBadge(status: string): { text: string; className: string } {
 export function AdminPesananList() {
   const [items, setItems] = useState<EcomAdminOrderListItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [status, setStatus] = useState("paid");
-  const [search, setSearch] = useState("");
+  // Sprint 6 Chunk 12 — filter persist via URL query. Bu Santi refresh page /
+  // buka link "Perlu Diproses" langsung mendarat di filter yang benar.
+  const [status, setStatus] = useUrlQueryState("status", "paid");
+  const [search, setSearch] = useUrlQueryState("search", "");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   // Sprint 4 Chunk 3 (31 Jul 2026) — Bulk selection for shipping actions.
@@ -116,14 +120,31 @@ export function AdminPesananList() {
       title="Pesanan Online"
       subtitle="Terima, proses, kirim, dan input resi pesanan customer."
       headerRight={
-        <button
-          onClick={() => load()}
-          disabled={refreshing}
-          aria-label="Refresh"
-          className="w-11 h-11 rounded-xl border border-cherry-200 text-ink-700 hover:bg-cherry-50 flex items-center justify-center disabled:opacity-40"
-        >
-          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              if (items.length === 0) {
+                toast.error("Tidak ada data untuk di-export");
+                return;
+              }
+              exportOrdersXlsx(items);
+              toast.success(`${items.length} order di-export`);
+            }}
+            aria-label="Export Excel"
+            title="Export Excel"
+            className="w-11 h-11 rounded-xl border border-cherry-200 text-ink-700 hover:bg-cherry-50 flex items-center justify-center"
+          >
+            <FileSpreadsheet size={16} aria-hidden="true" />
+          </button>
+          <button
+            onClick={() => load()}
+            disabled={refreshing}
+            aria-label="Refresh"
+            className="w-11 h-11 rounded-xl border border-cherry-200 text-ink-700 hover:bg-cherry-50 flex items-center justify-center disabled:opacity-40"
+          >
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
+          </button>
+        </div>
       }
     >
       <div>

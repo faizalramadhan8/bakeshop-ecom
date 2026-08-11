@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import {
   Search, Users, Loader2, Mail, Phone, ShoppingBag,
   UserCheck, UserX, ChevronRight, MapPin, TrendingUp, X, Ban, CheckCircle2,
+  FileSpreadsheet,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -15,6 +16,8 @@ import {
 } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
 import { SkeletonList } from "@/components/Skeleton";
+import { exportCustomersXlsx } from "@/lib/export";
+import { useUrlQueryState } from "@/lib/useUrlQueryState";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -35,8 +38,11 @@ export function AdminCustomers() {
 
   const [items, setItems] = useState<EcomAdminCustomerListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "banned" | "no_order">("all");
+  // Sprint 6 Chunk 12 — filter persist via URL query.
+  const [search, setSearch] = useUrlQueryState("search", "");
+  const [statusFilterRaw, setStatusFilterRaw] = useUrlQueryState("status", "all");
+  const statusFilter = statusFilterRaw as "all" | "active" | "banned" | "no_order";
+  const setStatusFilter = (v: "all" | "active" | "banned" | "no_order") => setStatusFilterRaw(v);
   const [total, setTotal] = useState(0);
   const [detailID, setDetailID] = useState<string | null>(null);
 
@@ -71,6 +77,23 @@ export function AdminCustomers() {
     <AdminShell
       title="Customer"
       subtitle={`${total} customer terdaftar — filter & drill-down riwayat order`}
+      headerRight={
+        <button
+          onClick={() => {
+            if (items.length === 0) {
+              toast.error("Tidak ada data untuk di-export");
+              return;
+            }
+            exportCustomersXlsx(items);
+            toast.success(`${items.length} customer di-export`);
+          }}
+          aria-label="Export Excel"
+          title="Export Excel"
+          className="w-11 h-11 rounded-xl border border-cherry-200 text-ink-700 hover:bg-cherry-50 flex items-center justify-center"
+        >
+          <FileSpreadsheet size={16} aria-hidden="true" />
+        </button>
+      }
     >
       {/* Search */}
       <div className="relative mb-3">

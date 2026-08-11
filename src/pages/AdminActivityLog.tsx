@@ -11,6 +11,7 @@ import {
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomActivityLogRow } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
+import { useUrlQueryState } from "@/lib/useUrlQueryState";
 import { SkeletonList } from "@/components/Skeleton";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -72,8 +73,9 @@ export function AdminActivityLog() {
 
   const [rows, setRows] = useState<EcomActivityLogRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState("all");
-  const [search, setSearch] = useState("");
+  // Sprint 6 Chunk 12 — filter persist via URL query.
+  const [action, setAction] = useUrlQueryState("action", "all");
+  const [search, setSearch] = useUrlQueryState("search", "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = () => {

@@ -7,6 +7,7 @@ import {
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomAdminProduct } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
+import { useUrlQueryState } from "@/lib/useUrlQueryState";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -17,11 +18,13 @@ function formatRp(n: number | null | undefined): string {
 
 export function AdminProdukList() {
   const [products, setProducts] = useState<EcomAdminProduct[]>([]);
-  const [search, setSearch] = useState("");
+  // Sprint 6 Chunk 12 — filter persist via URL query (bookmark-able).
+  const [search, setSearch] = useUrlQueryState("search", "");
+  const [statusFilterRaw, setStatusFilterRaw] = useUrlQueryState("status", "all");
+  const statusFilter = statusFilterRaw as "all" | "tayang" | "perlu_setup" | "hidden";
+  const setStatusFilter = (v: "all" | "tayang" | "perlu_setup" | "hidden") => setStatusFilterRaw(v);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Filter chips supaya admin cepat cari "yang tayang" / "yang perlu setup" tanpa scroll.
-  const [statusFilter, setStatusFilter] = useState<"all" | "tayang" | "perlu_setup" | "hidden">("all");
   // Sprint 5 Chunk 10 (2 Aug 2026) — bulk selection state.
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<"publish" | "unpublish" | "sync_price" | "reset_price" | null>(null);

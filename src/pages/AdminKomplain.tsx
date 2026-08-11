@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import {
-  AlertCircle, MessageSquare, Check, X, Loader2, Clock, Wallet,
+  AlertCircle, MessageSquare, Check, X, Loader2, Clock, Wallet, FileSpreadsheet,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   adminApi, decodeToken,
-  type ComplaintAdmin, type RefundMethod,
+  type ComplaintAdmin, type RefundMethod, type EcomRefundResponse,
 } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
+import { exportComplaintsXlsx } from "@/lib/export";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -70,10 +71,55 @@ export function AdminKomplain() {
     { key: "all", label: "Semua" },
   ];
 
+  // Sprint 6 Chunk 11 (4 Aug 2026) — export handler dengan fetch refund per
+  // complaint yang resolved (sequential parallel — 1 request per order untuk
+  // yang punya refund). Skala Bu Santi kecil (< 100 resolved/bulan), OK.
+  const [exporting, setExporting] = useState(false);
+  const doExport = async () => {
+    if (items.length === 0) {
+      toast.error("Tidak ada data untuk di-export");
+      return;
+    }
+    setExporting(true);
+    try {
+      // Fetch refunds hanya untuk complaint resolved yang mungkin ada refund.
+      const withRefundCheck = items.filter((c) => c.status === "resolved");
+      const refundMap: Record<string, EcomRefundResponse[]> = {};
+      await Promise.all(
+        withRefundCheck.map(async (c) => {
+          try {
+            const refunds = await adminApi.listRefundsByOrder(c.order_id);
+            const linked = (refunds || []).filter((r) => r.complaint_id === c.id);
+            if (linked.length > 0) refundMap[c.id] = linked;
+          } catch {
+            // silent — kalau 1 fetch gagal, export tetap jalan tanpa row refund itu
+          }
+        })
+      );
+      exportComplaintsXlsx(items, refundMap);
+      toast.success(`${items.length} komplain di-export`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal export");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <AdminShell
       title="Moderasi Komplain"
       subtitle="Balas keluhan dari customer supaya diselesaikan cepat."
+      headerRight={
+        <button
+          onClick={doExport}
+          disabled={exporting}
+          aria-label="Export Excel"
+          title="Export Excel"
+          className="w-11 h-11 rounded-xl border border-cherry-200 text-ink-700 hover:bg-cherry-50 flex items-center justify-center disabled:opacity-40"
+        >
+          {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} aria-hidden="true" />}
+        </button>
+      }
     >
       {/* Filter chips */}
       <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1">
