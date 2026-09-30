@@ -237,7 +237,7 @@ export function AdminProdukList() {
                         )}
                       </div>
                       <p className="text-xs text-ink-500">
-                        SKU: {p.sku} · Stok toko: {p.stock_pos} · Stok online: {p.stock_ecom}
+                        SKU: {p.sku} · Stok: {p.stock_ecom}
                       </p>
                     </div>
                     <div className="text-right shrink-0">

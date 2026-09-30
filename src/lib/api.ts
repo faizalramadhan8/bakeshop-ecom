@@ -304,7 +304,8 @@ export interface EcomAdminProduct {
 }
 
 export interface EcomFieldsPayload {
-  stock_ecom?: number;
+  /** Stok toko + online digabung 29 Sep 2026 — BE menolak patch stok dari
+   *  endpoint ini. Field dihapus dari payload; ubah stok lewat POS. */
   ecom_price?: number | null;
   ecom_member_price?: number | null;
   ecom_is_available?: boolean;

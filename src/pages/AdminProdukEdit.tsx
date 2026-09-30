@@ -20,7 +20,6 @@ export function AdminProdukEdit() {
   const [error, setError] = useState<string | null>(null);
 
   const [available, setAvailable] = useState(false);
-  const [stockEcom, setStockEcom] = useState("");
   const [ecomPrice, setEcomPrice] = useState("");
   const [ecomMemberPrice, setEcomMemberPrice] = useState("");
   const [weight, setWeight] = useState("");
@@ -53,7 +52,6 @@ export function AdminProdukEdit() {
         if (cancelled) return;
         setProduct(p);
         setAvailable(p.ecom_is_available);
-        setStockEcom(String(p.stock_ecom));
         setEcomPrice(p.ecom_price !== null ? String(p.ecom_price) : "");
         setEcomMemberPrice(p.ecom_member_price !== null ? String(p.ecom_member_price) : "");
         setWeight(p.ecom_weight_grams !== null ? String(p.ecom_weight_grams) : "");
@@ -81,7 +79,6 @@ export function AdminProdukEdit() {
       const parseNumber = (s: string) => (s.trim() === "" ? null : Number(s));
       const updated = await adminApi.updateEcomFields(product.id, {
         ecom_is_available: available,
-        stock_ecom: Number(stockEcom) || 0,
         ecom_price: parseNumber(ecomPrice),
         ecom_member_price: parseNumber(ecomMemberPrice),
         ecom_weight_grams: parseNumber(weight),
@@ -189,14 +186,10 @@ export function AdminProdukEdit() {
   // Link import removed above; re-import for other in-body usages.
 
   const warnings: string[] = [];
-  if (available && Number(stockEcom) === 0)
-    warnings.push("Stok online 0 — produk tidak akan tampil di storefront");
+  if (available && product.stock_ecom === 0)
+    warnings.push("Stok habis — produk tidak akan tampil di storefront");
   if (available && !weight.trim())
     warnings.push("Berat belum di-set — tidak bisa hitung ongkir");
-  if (Number(stockEcom) > product.stock_pos)
-    warnings.push(
-      `Stok online (${stockEcom}) lebih besar dari stok toko (${product.stock_pos})`
-    );
 
   return (
     <AdminShell
@@ -406,24 +399,28 @@ export function AdminProdukEdit() {
             </button>
           </section>
 
+          {/* Stok toko dan online digabung 29 Sep 2026 (permintaan Fai +
+              Bu Santi: "stok online dan stok e-commerce jadi 1"). Angkanya
+              read-only di sini — satu-satunya jalur ubah stok adalah menu
+              Sesuaikan Stok di POS, yang mewajibkan alasan dan menulis audit
+              trail. BE juga menolak patch stok dari endpoint ini. */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
-            <h2 className="text-sm font-black text-ink-900 mb-3">Stok Online</h2>
-            <div className="flex flex-col gap-2">
-              <input
-                type="number"
-                min="0"
-                value={stockEcom}
-                onChange={(e) => setStockEcom(e.target.value)}
-                className="px-4 py-3 rounded-xl border border-cherry-200 text-sm focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400"
-              />
-              <p className="text-xs text-ink-500">
-                Stok toko fisik saat ini: <b className="text-ink-900">{product.stock_pos}</b>{" "}
-                (dikelola di POS, tidak di sini)
-              </p>
+            <h2 className="text-sm font-black text-ink-900 mb-3">Stok</h2>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-ink-900 tabular-nums">
+                {product.stock_ecom}
+              </span>
+              <span className="text-sm text-ink-500">tersedia</span>
             </div>
+            <p className="text-xs text-ink-500 mt-2">
+              Stok toko dan online sekarang satu angka. Setiap penjualan online
+              langsung mengurangi stok di kasir, begitu juga sebaliknya. Untuk
+              mengubahnya, pakai menu <b className="text-ink-900">Stok &rarr; Sesuaikan
+              Stok</b> di aplikasi POS supaya alasannya tercatat.
+            </p>
 
             {/* Sprint 3 #16 — Dispatch restock alert kalau produk sudah
-                restock. Muncul cuma kalau stock_ecom saat ini > 0. Idempotent
+                restock. Muncul cuma kalau stok saat ini > 0. Idempotent
                 di BE (subscriber yang sudah notified skip auto). */}
             {product.stock_ecom > 0 && (
               <div className="mt-4 pt-4 border-t border-cherry-100">
