@@ -162,6 +162,19 @@ export function AdminEcomSettings() {
                   className="w-full h-11 px-3 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30 font-mono"
                 />
               </Field>
+              <Field
+                label="Titik Lokasi (untuk Gojek / Grab)"
+                hint="Tempel link Google Maps atau koordinat. Tanpa ini, Gojek dan Grab tidak akan muncul di pilihan ongkir."
+              >
+                <TitikLokasi
+                  lat={data.store_pickup_latitude ?? null}
+                  lng={data.store_pickup_longitude ?? null}
+                  onChange={(lat, lng) => {
+                    patch("store_pickup_latitude", lat);
+                    patch("store_pickup_longitude", lng);
+                  }}
+                />
+              </Field>
             </div>
           </div>
         </Section>
@@ -403,6 +416,87 @@ export function AdminEcomSettings() {
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────
+
+// TitikLokasi — satu kotak isian yang menerima link Google Maps ATAU koordinat.
+//
+// Dua kotak angka mentah (lat & lng) adalah cara paling cepat salah: Bu Santi
+// harus tahu mana yang lintang dan mana yang bujur, dan tertukar berarti titik
+// jemputnya mendarat di benua lain tanpa pesan salah apa pun. Menempel link
+// peta adalah yang benar-benar dia lakukan sehari-hari.
+//
+// Diterima: "-6.445156, 106.856954" dan URL Google Maps yang memuat
+// "@lat,lng" atau "?q=lat,lng". Link pendek (maps.app.goo.gl) TIDAK memuat
+// koordinat, jadi ditolak dengan petunjuk cara mendapatkan yang panjang.
+function TitikLokasi({
+  lat, lng, onChange,
+}: {
+  lat: number | null;
+  lng: number | null;
+  onChange: (lat: number | null, lng: number | null) => void;
+}) {
+  const [teks, setTeks] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const terisi = typeof lat === "number" && typeof lng === "number";
+
+  const baca = (nilai: string) => {
+    setTeks(nilai);
+    const v = nilai.trim();
+    if (!v) { setError(null); onChange(null, null); return; }
+
+    // Urutan penting: "@lat,lng" dulu (link peta panjang), baru pasangan
+    // angka biasa — kalau dibalik, URL bisa salah terbaca dari potongan lain.
+    const m =
+      v.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+      v.match(/[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/) ||
+      v.match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
+
+    if (!m) {
+      setError(
+        v.includes("goo.gl") || v.includes("maps.app")
+          ? "Link pendek tidak memuat koordinat. Buka link itu dulu di peta, lalu salin alamat dari bilah browser."
+          : "Belum terbaca. Tempel link Google Maps, atau ketik koordinat seperti -6.445156, 106.856954",
+      );
+      return;
+    }
+    const la = parseFloat(m[1]), ln = parseFloat(m[2]);
+    // Batas wilayah Indonesia — menangkap lintang/bujur yang tertukar, yang
+    // merupakan kesalahan paling umum saat menyalin koordinat.
+    if (la < -11 || la > 6 || ln < 95 || ln > 141) {
+      setError("Koordinat di luar Indonesia. Mungkin lintang dan bujurnya tertukar?");
+      return;
+    }
+    setError(null);
+    onChange(la, ln);
+  };
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={teks}
+        onChange={(e) => baca(e.target.value)}
+        placeholder="Tempel link Google Maps di sini"
+        className="w-full h-11 px-3 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30"
+      />
+      {error && (
+        <p role="alert" className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>
+      )}
+      {terisi && !error && (
+        <p className="mt-1.5 text-xs text-green-700 font-semibold">
+          Titik tersimpan: {lat!.toFixed(6)}, {lng!.toFixed(6)}{" "}
+          <a
+            href={`https://www.google.com/maps?q=${lat},${lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline font-bold"
+          >
+            Periksa di peta
+          </a>
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Section({
   icon, title, desc, children,

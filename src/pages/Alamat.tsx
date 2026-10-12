@@ -23,10 +23,19 @@ async function reverseGeocode(lat: number, lng: number): Promise<Partial<Address
   //   road + house_number → Alamat jalan
   //   postcode → Kode pos
   const road = [a.road, a.house_number].filter(Boolean).join(" No. ");
+  // CATATAN (12 Okt 2026): untuk banyak titik di Indonesia, OSM TIDAK punya
+  // level kecamatan sama sekali. Contoh nyata — Mekar Jaya, Sukmajaya, Depok
+  // mengembalikan hanya {road, village, city, state, postcode}: tidak ada
+  // `suburb`, `city_district`, maupun `district`. Jadi kecamatan kosong bukan
+  // karena pemetaan kita salah, melainkan karena datanya memang tidak ada.
+  //
+  // Itu sebabnya setelah GPS kita LANJUT mencari di Biteship (lihat
+  // useCurrentLocation): Biteship punya kecamatan, dan sekalian memberi
+  // area_id yang dibutuhkan untuk menghitung ongkir akurat.
   return {
     province: a.state || "",
     city: a.city || a.town || a.county || a.regency || "",
-    district: a.suburb || a.city_district || a.district || "",
+    district: a.city_district || a.district || a.subdistrict || a.municipality || a.suburb || "",
     subdistrict: a.village || a.hamlet || a.neighbourhood || a.quarter || "",
     zipcode: a.postcode || "",
     street_address: road || data.display_name?.split(",").slice(0, 2).join(", ") || "",
@@ -87,10 +96,18 @@ export function Alamat() {
       biteship_area_id: a.id,
       province: a.administrative_division_level_1_name,
       city: a.administrative_division_level_2_name,
-      subdistrict: a.administrative_division_level_3_name,
-      // Biteship API tidak provide "district" (kecamatan) separately —
-      // fallback pakai city sebagai display. Customer bisa edit manual.
-      district: prev.district || a.administrative_division_level_3_name,
+      // level_3 Biteship adalah KECAMATAN, bukan kelurahan — terbukti dari
+      // responsnya sendiri: `administrative_division_level_3_type: "district"`,
+      // dan nilainya nama kecamatan (mis. "Tapos", "Sukmajaya").
+      //
+      // Sampai 12 Okt 2026 nilai ini dimasukkan ke `subdistrict`, sehingga
+      // kolom Kelurahan terisi nama KECAMATAN — persis yang dilaporkan Fai.
+      // Akibatnya label paket mencantumkan kelurahan yang salah.
+      district: a.administrative_division_level_3_name,
+      // Biteship tidak menyediakan kelurahan. Nilai dari GPS (OSM `village`)
+      // biasanya benar, jadi JANGAN ditimpa. Kalau dua-duanya kosong,
+      // customer mengisinya sendiri di "Edit manual field lokasi".
+      subdistrict: prev.subdistrict || "",
       zipcode: String(a.postal_code),
     }));
     setAreaQuery(a.name);
@@ -113,10 +130,41 @@ export function Alamat() {
           setForm((prev) => ({
             ...prev,
             ...parts,
-            // Simpan lat/lng juga (walaupun tidak dipakai display, useful untuk
-            // future map picker / Biteship instant courier accuracy).
+            // Koordinat disimpan: kurir instan (Gojek/Grab) menghitung tarif
+            // dari titik, bukan dari area_id.
+            latitude,
+            longitude,
           }));
-          toast.success("Alamat dari lokasi berhasil di-isi");
+
+          // OSM sering tidak punya kecamatan untuk titik di Indonesia, dan
+          // tidak pernah punya area_id Biteship — padahal keduanya yang
+          // menentukan ongkir. Jadi hasil GPS langsung dipakai sebagai kata
+          // kunci pencarian Biteship.
+          //
+          // Kalau hasilnya tepat satu, dipilih otomatis. Kalau lebih dari
+          // satu, daftarnya dibuka supaya customer memilih sendiri — menebak
+          // di antara beberapa kecamatan berisiko ongkir salah.
+          const kunci = [parts.subdistrict, parts.city].filter(Boolean).join(" ");
+          if (kunci.length >= 3) {
+            setAreaQuery(kunci);
+            try {
+              const rows = await shippingApi.searchAreas(kunci);
+              if (rows && rows.length === 1) {
+                pickArea(rows[0]);
+                toast.success("Alamat dari lokasi berhasil diisi");
+                return;
+              }
+              if (rows && rows.length > 1) {
+                setAreaResults(rows);
+                setAreaOpen(true);
+                toast("Pilih kecamatan yang sesuai dari daftar", { icon: "📍" });
+                return;
+              }
+            } catch {
+              /* pencarian gagal — biarkan hasil GPS apa adanya */
+            }
+          }
+          toast.success("Alamat dari lokasi berhasil diisi");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Gagal cari alamat");
         } finally {

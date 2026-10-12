@@ -570,6 +570,11 @@ export interface Address {
   street_address: string;
   notes?: string;
   is_default: boolean;
+  /** Koordinat dari GPS. Dipakai kurir instan (Gojek/Grab) yang menghitung
+   *  tarif dari titik, bukan dari area_id. Kolomnya sudah ada di tabel
+   *  `ecom_addresses` sejak awal, tapi FE belum pernah mengirimnya. */
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface AddressPayload {
@@ -885,6 +890,10 @@ export interface EcomSettings {
   store_email?: string;
   store_pickup_address?: string;
   store_pickup_phone?: string;
+  /** Koordinat titik jemput. Wajib kalau mau kurir instan (Gojek/Grab) —
+   *  mereka menghitung tarif dari jarak tempuh, bukan dari wilayah. */
+  store_pickup_latitude?: number | null;
+  store_pickup_longitude?: number | null;
   store_pickup_area_id?: string;
   payment_pg_enabled: boolean;
   payment_manual_enabled: boolean;
