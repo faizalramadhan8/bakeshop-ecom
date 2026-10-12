@@ -238,11 +238,14 @@ export const adminApi = {
 
   // Upload gambar produk ecom. Multipart form-data (bypass generic request()
   // yang JSON-only). Endpoint /upload berlaku umum, dipakai POS + ecom.
-  uploadImage: async (file: File): Promise<{ url: string; filename: string }> => {
+  uploadImage: async (
+    file: File,
+    type: "products" | "payment-proof" = "products",
+  ): Promise<{ url: string; filename: string }> => {
     const tk = getToken();
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch(`${API_PREFIX}/upload?type=products`, {
+    const res = await fetch(`${API_PREFIX}/upload?type=${type}`, {
       method: "POST",
       headers: tk ? { Authorization: `Bearer ${tk}` } : {},
       body: fd,
@@ -729,6 +732,8 @@ export interface CustomerOrderDetail {
   // (kalau completed = customer sudah konfirmasi, atau auto-complete 7d).
   ecom_delivered_at?: string;
   created_at: string;
+  /** URL bukti transfer yang sudah di-upload customer. Kosong = belum. */
+  payment_proof?: string;
   items: {
     product_id: string;
     name: string;
@@ -987,4 +992,6 @@ export const ordersApi = {
     request<CustomerOrderDetail>("POST", `/ecom/orders/${id}/cancel`, {}, "customer"),
   retryPayment: (id: string) =>
     request<CustomerOrderDetail>("POST", `/ecom/orders/${id}/retry-payment`, {}, "customer"),
+  submitPaymentProof: (id: string, paymentProof: string) =>
+    request<CustomerOrderDetail>("POST", `/ecom/orders/${id}/payment-proof`, { payment_proof: paymentProof }, "customer"),
 };

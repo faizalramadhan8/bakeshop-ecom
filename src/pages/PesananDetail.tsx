@@ -1,12 +1,196 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft, Package, MapPin, Truck, CreditCard, Check, Clock, AlertCircle, Copy,
-  PackageCheck, Star, X, Sparkles, Wallet, Receipt,
+  PackageCheck, Star, X, Sparkles, Wallet, Receipt, Upload,
   type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ordersApi, accountApi, complaintApi, formatRp, formatETD, type ComplaintReason, type CustomerOrderDetail } from "@/lib/api";
+import { ordersApi, accountApi, complaintApi, adminApi, formatRp, formatETD, type ComplaintReason, type CustomerOrderDetail } from "@/lib/api";
+import { usePublicSettings } from "@/lib/publicSettings";
+
+// ─── Transfer manual ─────────────────────────────────────────────────────────
+// Bu Santi memakai transfer manual (payment gateway dimatikan di Pengaturan).
+// Sampai 12 Okt 2026 blok ini cuma menulis "Transfer ke rekening toko Bu Santi"
+// tanpa pernah menyebut rekeningnya, plus nomor WA contoh yang belum diganti —
+// customer harfiah tidak punya cara membayar.
+//
+// Sekarang: rekening diambil dari Pengaturan POS (satu sumber, dipakai juga
+// oleh struk WA), nomor admin dari Pengaturan ecom, dan bukti transfer
+// di-upload langsung supaya menempel di pesanan alih-alih tenggelam di chat.
+function TransferManual({
+  order, onUploaded, onCancel, cancelling,
+}: {
+  order: CustomerOrderDetail;
+  onUploaded: (o: CustomerOrderDetail) => void;
+  onCancel: () => void;
+  cancelling: boolean;
+}) {
+  const settings = usePublicSettings();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const accounts = settings.bank_accounts ?? [];
+  const waNumber = settings.wa_contact_number?.trim();
+
+  const salin = async (nomor: string) => {
+    try {
+      await navigator.clipboard.writeText(nomor.replace(/\s|-/g, ""));
+      toast.success("Nomor rekening disalin");
+    } catch {
+      toast.error("Gagal menyalin. Silakan catat manual.");
+    }
+  };
+
+  const pilihBerkas = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // boleh pilih berkas sama lagi setelah gagal
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type)) {
+      setError("Berkas harus berupa foto (JPG, PNG, atau WEBP).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ukuran foto maksimal 5 MB. Coba foto ulang dengan kualitas lebih rendah.");
+      return;
+    }
+    setError(null);
+    setUploading(true);
+    try {
+      const { url } = await adminApi.uploadImage(file, "payment-proof");
+      const updated = await ordersApi.submitPaymentProof(order.id, url);
+      onUploaded(updated);
+      toast.success("Bukti transfer terkirim. Menunggu dicek admin.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengirim bukti transfer.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-4">
+      {accounts.length > 0 ? (
+        <div>
+          <p className="text-sm font-bold text-ink-900 mb-2">
+            Transfer {formatRp(order.total)} ke salah satu rekening berikut
+          </p>
+          <ul className="space-y-2">
+            {accounts.map((a, i) => (
+              <li key={i} className="rounded-xl border border-cherry-200 bg-white p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-500">{a.bank_name}</p>
+                <div className="flex items-center justify-between gap-3 mt-1">
+                  <p className="text-lg font-black text-ink-900 tabular-nums break-all">{a.account_number}</p>
+                  <button
+                    type="button"
+                    onClick={() => salin(a.account_number)}
+                    aria-label={`Salin nomor rekening ${a.bank_name}`}
+                    className="shrink-0 inline-flex items-center gap-1.5 min-h-11 px-3 rounded-xl border border-cherry-300 text-sm font-bold text-cherry-700 active:scale-95 transition-transform"
+                  >
+                    <Copy size={15} aria-hidden="true" /> Salin
+                  </button>
+                </div>
+                <p className="text-sm text-ink-700 mt-0.5">a.n. {a.account_holder}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-ink-500 mt-2 leading-relaxed">
+            Transfer sesuai jumlah di atas, lalu kirim foto buktinya di bawah ini.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-ink-700 leading-relaxed" role="status">
+          Rekening tujuan belum tersedia. Silakan hubungi admin lebih dulu sebelum transfer.
+        </p>
+      )}
+
+      {order.payment_proof ? (
+        <div className="rounded-xl border border-green-300 bg-green-50 p-3">
+          <p className="text-sm font-bold text-green-800 flex items-center gap-1.5">
+            <Check size={16} aria-hidden="true" /> Bukti transfer sudah terkirim
+          </p>
+          <p className="text-xs text-green-700 mt-0.5 leading-relaxed">
+            Admin akan mengecek dan mengonfirmasi pesananmu. Belum perlu melakukan apa-apa lagi.
+          </p>
+          <img
+            src={order.payment_proof}
+            alt="Bukti transfer yang kamu kirim"
+            loading="lazy"
+            className="mt-2 w-full max-w-[220px] rounded-lg border border-green-200"
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="mt-2 text-xs font-bold text-ink-500 underline disabled:opacity-40"
+          >
+            {uploading ? "Mengirim…" : "Ganti dengan foto lain"}
+          </button>
+        </div>
+      ) : (
+        <div>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="w-full min-h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-cherry-600 text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
+          >
+            {uploading ? (
+              <><Clock size={16} className="animate-spin" aria-hidden="true" /> Mengirim…</>
+            ) : (
+              <><Upload size={16} aria-hidden="true" /> Kirim Bukti Transfer</>
+            )}
+          </button>
+          <p className="text-xs text-ink-500 mt-1.5 text-center">
+            Bisa pilih dari galeri atau foto langsung. Maksimal 5 MB.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="text-xs font-semibold text-cherry-700 bg-cherry-50 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
+
+      {/* TANPA atribut `capture`. Dengan `capture="environment"` ponsel
+          langsung membuka kamera dan galeri tidak bisa dipilih — padahal bukti
+          transfer biasanya sudah berupa tangkapan layar mobile banking yang
+          tersimpan di galeri, bukan sesuatu yang difoto saat itu juga.
+          `accept="image/*"` saja membuat sistem menawarkan dua-duanya. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={pilihBerkas}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <div className="flex items-center gap-3 flex-wrap">
+        {waNumber && (
+          <a
+            href={`https://wa.me/${waNumber.replace(/\D/g, "").replace(/^0/, "62")}?text=${encodeURIComponent(`Halo, saya mau tanya pesanan #${order.id.slice(0, 8)}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-bold text-ink-700 underline"
+          >
+            Hubungi admin
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelling}
+          className="text-xs font-bold text-ink-500 hover:text-cherry-600 disabled:opacity-40"
+        >
+          Batalkan pesanan
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // Map courier name (case-insensitive substring) → tracking URL template.
 // Return null kalau kurir tidak dikenal — FE hide tombol lacak.
@@ -386,22 +570,12 @@ export function PesananDetail() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-3 text-xs text-ink-700 leading-relaxed">
-                  <p className="mb-1">
-                    Transfer ke rekening toko Bu Santi kemudian hubungi admin untuk konfirmasi.
-                  </p>
-                  <p className="text-ink-500">
-                    Kontak admin: WhatsApp 08123456789
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setCancelOpen(true)}
-                    disabled={cancelling}
-                    className="mt-3 text-xs font-bold text-ink-500 hover:text-cherry-600 disabled:opacity-40"
-                  >
-                    Batalkan pesanan
-                  </button>
-                </div>
+                <TransferManual
+                  order={order}
+                  onUploaded={setOrder}
+                  onCancel={() => setCancelOpen(true)}
+                  cancelling={cancelling}
+                />
               )}
             </div>
           </div>

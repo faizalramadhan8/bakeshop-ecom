@@ -18,6 +18,10 @@ export interface PublicSettings {
   store_name: string;
   payment_pg_enabled: boolean;
   payment_manual_enabled: boolean;
+  /** Rekening tujuan transfer manual, dari Pengaturan POS. Kosong = Bu Santi
+   *  belum mengisi rekening — customer tidak punya cara membayar, jadi
+   *  halaman pesanan harus menyuruhnya menghubungi admin. */
+  bank_accounts?: { bank_name: string; account_number: string; account_holder: string }[];
   // Sprint 5 Chunk 7 — Homepage CMS
   hero_kicker?: string;
   hero_title?: string;

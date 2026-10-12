@@ -551,6 +551,44 @@ export function AdminPesananDetail() {
               <dd className="text-lg font-black text-cherry-500">{formatRp(order.total)}</dd>
             </div>
           </dl>
+
+          {/* Bukti transfer — ditampilkan HANYA untuk transfer manual, karena
+              pembayaran lewat payment gateway tidak butuh bukti manual.
+              Ditaruh tepat di bawah total supaya Bu Santi bisa mencocokkan
+              nominal di struk dengan nominal tagihan tanpa berpindah pandang. */}
+          {order.payment.mode !== "pg" && (
+            <div className="mt-4 pt-4 border-t border-cherry-100">
+              <p className="text-xs font-black uppercase tracking-wider text-ink-500 mb-2">
+                Bukti Transfer
+              </p>
+              {order.payment_proof ? (
+                <>
+                  <a
+                    href={order.payment_proof}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-xl border border-cherry-200 overflow-hidden"
+                    aria-label="Buka bukti transfer ukuran penuh di tab baru"
+                  >
+                    <img
+                      src={order.payment_proof}
+                      alt="Bukti transfer dari customer"
+                      loading="lazy"
+                      className="w-full max-w-xs"
+                    />
+                  </a>
+                  <p className="text-xs text-ink-500 mt-1.5">
+                    Klik gambar untuk memperbesar. Cocokkan nominal dan tanggalnya
+                    dengan mutasi rekening sebelum menandai sudah dibayar.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-ink-500" role="status">
+                  Customer belum mengirim bukti transfer.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Action buttons */}
