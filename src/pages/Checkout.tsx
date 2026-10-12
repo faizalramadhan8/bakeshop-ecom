@@ -11,6 +11,7 @@ import {
   type PGChannel, type PGChannelGroup, type PGChannelCategory,
   type EcomProductDetail,
 } from "@/lib/api";
+import { usePublicSettings } from "@/lib/publicSettings";
 import { useCart, refreshCart } from "@/lib/cartStore";
 import { trackEvent } from "@/lib/analytics";
 
@@ -113,6 +114,17 @@ export function Checkout() {
   const [channelsError, setChannelsError] = useState<string | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<PGChannel | null>(null);
 
+  const settings = usePublicSettings();
+  // `payment_pg_enabled` mati = Bu Santi memakai transfer manual. Dalam mode
+  // itu daftar kanal PG TIDAK boleh diambil sama sekali: endpoint-nya dipanggil
+  // langsung dari browser ke alifworks, dan saat PG tidak dipakai panggilan itu
+  // gagal lalu menampilkan "Failed to fetch" di tempat metode pembayaran —
+  // customer mengira toko rusak, padahal transfer manual memang tersedia.
+  //
+  // Dibaca sebagai `!== false` supaya selama pengaturan belum termuat
+  // perilakunya sama seperti sebelumnya (PG aktif), bukan mendadak manual.
+  const pgEnabled = settings.payment_pg_enabled !== false;
+
   const loadChannels = () => {
     setLoadingChannels(true);
     setChannelsError(null);
@@ -140,8 +152,16 @@ export function Checkout() {
   };
 
   useEffect(() => {
+    if (!pgEnabled) {
+      // Bersihkan sisa state kalau saklarnya berubah saat halaman terbuka.
+      setChannelsError(null);
+      setChannelGroups([]);
+      setSelectedChannel(null);
+      return;
+    }
     loadChannels();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pgEnabled]);
 
   useEffect(() => {
     if (!isBuyNow) refreshCart();
@@ -492,8 +512,8 @@ export function Checkout() {
       <section className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
         <button
           type="button"
-          onClick={() => !loadingChannels && !channelsError && channelGroups.length > 0 && setPaymentSheetOpen(true)}
-          disabled={loadingChannels || !!channelsError || channelGroups.length === 0}
+          onClick={() => pgEnabled && !loadingChannels && !channelsError && channelGroups.length > 0 && setPaymentSheetOpen(true)}
+          disabled={!pgEnabled || loadingChannels || !!channelsError || channelGroups.length === 0}
           className="w-full flex items-start gap-3 text-left disabled:opacity-100 disabled:cursor-default"
         >
           <div className="flex items-center gap-2 shrink-0 pt-0.5">
@@ -502,14 +522,31 @@ export function Checkout() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h2 className="text-sm font-black text-ink-900">Metode Pembayaran</h2>
-              {!loadingChannels && !channelsError && channelGroups.length > 0 && (
+              {pgEnabled && !loadingChannels && !channelsError && channelGroups.length > 0 && (
                 <span className="text-xs font-bold text-cherry-500 shrink-0 inline-flex items-center gap-0.5">
                   {selectedChannel ? "Ubah" : "Lihat Semua"}
                   <ChevronRight size={12} aria-hidden="true" />
                 </span>
               )}
             </div>
-            {loadingChannels ? (
+            {!pgEnabled ? (
+              /* Transfer manual — satu-satunya metode saat PG dimatikan.
+                 Ditampilkan sebagai keterangan, bukan pilihan, karena memang
+                 tidak ada yang bisa dipilih. Rincian rekeningnya menyusul di
+                 halaman pesanan setelah "Buat Pesanan" ditekan — di sana
+                 nominalnya sudah pasti, termasuk ongkir. */
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
+                  <Wallet size={16} className="text-cherry-500" aria-hidden="true" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black text-ink-900">Transfer Bank</p>
+                  <p className="text-xs text-ink-500 leading-snug">
+                    Nomor rekening muncul setelah pesanan dibuat. Transfer lalu kirim buktinya.
+                  </p>
+                </div>
+              </div>
+            ) : loadingChannels ? (
               <div className="flex items-center gap-2 text-ink-500 text-sm">
                 <Loader2 size={16} className="animate-spin" aria-hidden="true" />
                 Memuat metode pembayaran…
@@ -706,15 +743,30 @@ export function Checkout() {
         <div className="max-w-3xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] sm:text-xs text-ink-500 leading-tight">Total Pembayaran</p>
+            {/* Tombol yang mati tanpa alasan membuat customer menekannya
+                berulang kali lalu menyerah. Jadi di tempat ini disebutkan apa
+                yang masih kurang — urutannya mengikuti urutan bagian di
+                halaman: alamat, kurir, baru metode pembayaran. */}
             <p className="text-base sm:text-lg font-black text-cherry-500 leading-tight truncate">
-              {selectedRate ? formatRp(total) : (
-                <span className="text-ink-500 text-sm font-normal">Pilih kurir</span>
+              {!selectedAddress ? (
+                <span className="text-ink-500 text-sm font-normal">Pilih alamat dulu</span>
+              ) : !selectedRate ? (
+                <span className="text-ink-500 text-sm font-normal">Pilih kurir dulu</span>
+              ) : pgEnabled && !selectedChannel ? (
+                <span className="text-ink-500 text-sm font-normal">Pilih metode bayar</span>
+              ) : (
+                formatRp(total)
               )}
             </p>
           </div>
           <button
             onClick={placeOrder}
-            disabled={placing || !selectedAddress || !selectedRate}
+            /* Di mode PG, metode pembayaran WAJIB dipilih dulu. Sebelum ini
+               tombolnya tetap bisa ditekan walau kanal belum dipilih —
+               pesanan terbuat, lalu gagal di sisi PG dan jatuh ke manual
+               tanpa customer tahu apa yang terjadi. Di mode transfer manual
+               tidak ada yang perlu dipilih, jadi tidak ikut dihalangi. */
+            disabled={placing || !selectedAddress || !selectedRate || (pgEnabled && !selectedChannel)}
             className="shrink-0 px-4 sm:px-6 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-40 active:scale-[0.98]"
           >
             {placing ? (
@@ -829,9 +881,16 @@ function ShippingSheet({
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-black text-ink-900 truncate">{carrier}</p>
-                        {/* Badge Termurah kalau salah satu service di carrier ini
-                            adalah yang paling murah keseluruhan */}
-                        {options.some((o) => o === cheapest) && (
+                        {/* Badge Termurah hanya kalau harga YANG TERTULIS di
+                            baris ini memang yang termurah.
+                            Dulu syaratnya "carrier ini memuat opsi termurah",
+                            padahal baris carrier yang sedang dipilih menampilkan
+                            harga opsi TERPILIH, bukan yang termurah. Hasilnya
+                            label "Termurah" nempel di Rp 28.000 sementara
+                            carrier lain terpampang Rp 18.000 — pembaca wajar
+                            menyimpulkan labelnya bohong. Opsi termurah tetap
+                            ditandai di dalam daftar saat grup dibuka. */}
+                        {(selectedInCarrier ? selectedInCarrier === cheapest : cheapestInCarrier === cheapest) && (
                           <span className="inline-flex items-center gap-0.5 text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
                             Termurah
                           </span>
@@ -840,6 +899,14 @@ function ShippingSheet({
                       {selectedInCarrier ? (
                         <p className="text-xs text-cherry-600 font-bold">
                           {selectedInCarrier.service_name} · {formatRp(selectedInCarrier.cost)}
+                          {/* Kalau yang dipilih bukan yang termurah di carrier
+                              ini, sebutkan — customer sering tidak membuka grup
+                              dan tidak tahu ada yang lebih hemat. */}
+                          {cheapestInCarrier.cost < selectedInCarrier.cost && (
+                            <span className="font-semibold text-ink-500">
+                              {" "}· ada {formatRp(cheapestInCarrier.cost)}
+                            </span>
+                          )}
                         </p>
                       ) : (
                         <p className="text-xs text-ink-500">

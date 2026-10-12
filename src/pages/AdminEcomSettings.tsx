@@ -47,9 +47,19 @@ export function AdminEcomSettings() {
       .catch(() => {});
   }, []);
 
+  // Functional updater, BUKAN `{ ...data, ... }`.
+  //
+  // Bug 12 Okt 2026: Titik Lokasi tersimpan lalu hilang setelah refresh.
+  // Penyebabnya di sini — memanggil patch dua kali berturut-turut dalam satu
+  // penanganan kejadian (latitude lalu longitude) membuat panggilan kedua
+  // memakai `data` yang masih versi lama dari closure, sehingga perubahan
+  // pertama tertimpa. Yang tersimpan cuma longitude; latitude hilang diam-diam,
+  // dan tanpa keduanya kurir instan tidak pernah muncul.
+  //
+  // Jebakan ini berlaku untuk SEMUA isian, bukan cuma koordinat — siapa pun
+  // yang nanti mengubah dua field sekaligus akan kena hal yang sama.
   const patch = <K extends keyof EcomSettings>(k: K, v: EcomSettings[K]) => {
-    if (!data) return;
-    setData({ ...data, [k]: v });
+    setData((prev) => (prev ? { ...prev, [k]: v } : prev));
     setDirty(true);
   };
 
@@ -436,9 +446,19 @@ function TitikLokasi({
 }) {
   const [teks, setTeks] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Sebelum diketik, kotak ini mengikuti nilai yang tersimpan. Tanpa ini
+  // isinya selalu kosong setelah refresh — pengaturan termuat belakangan
+  // (asinkron), jadi saat komponen pertama dipasang lat/lng masih kosong,
+  // dan tidak ada yang mengisinya lagi setelah data datang.
+  const [disentuh, setDisentuh] = useState(false);
   const terisi = typeof lat === "number" && typeof lng === "number";
 
+  useEffect(() => {
+    if (!disentuh && terisi) setTeks(`${lat}, ${lng}`);
+  }, [lat, lng, terisi, disentuh]);
+
   const baca = (nilai: string) => {
+    setDisentuh(true);
     setTeks(nilai);
     const v = nilai.trim();
     if (!v) { setError(null); onChange(null, null); return; }
