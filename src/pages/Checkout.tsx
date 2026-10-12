@@ -293,7 +293,14 @@ export function Checkout() {
       toast.error("Pilih metode pengiriman");
       return;
     }
-    if (!selectedChannel) {
+    // Hanya wajib di mode payment gateway. Saat transfer manual tidak ada
+    // kanal untuk dipilih, jadi pemeriksaan ini akan selalu gagal dan
+    // pesanan TIDAK PERNAH bisa dibuat — tombolnya aktif, tapi setiap klik
+    // dijawab "Pilih metode pembayaran" tanpa ada yang bisa dipilih.
+    //
+    // Syarat yang sama sudah dipakai untuk menonaktifkan tombol; dua tempat
+    // ini harus selalu sejalan, kalau tidak tombolnya berbohong.
+    if (pgEnabled && !selectedChannel) {
       toast.error("Pilih metode pembayaran");
       return;
     }
@@ -310,8 +317,10 @@ export function Checkout() {
         shipping_cost: selectedRate.cost,
         shipping_etd: selectedRate.etd,
         voucher_code: appliedVoucher?.code,
-        payment_channel: selectedChannel.payment_code,
-        payment_channel_category: selectedChannel.category,
+        // Kosong di mode transfer manual — backend memang tidak memakainya
+        // di jalur itu (lihat CreateOrder: channelSaved dikosongkan).
+        payment_channel: selectedChannel?.payment_code ?? "",
+        payment_channel_category: selectedChannel?.category ?? "",
         selected_item_ids: selectedIds,
         buy_now_items: ctx.mode === "buy_now" ? ctx.buy_now_items : undefined,
       });

@@ -42,6 +42,49 @@ async function reverseGeocode(lat: number, lng: number): Promise<Partial<Address
   };
 }
 
+// geocodeAlamat — cari koordinat dari alamat yang DIKETIK.
+//
+// Kenapa perlu (12 Okt 2026): koordinat hanya terisi kalau customer menekan
+// "Gunakan Lokasi Saya", dan mayoritas tidak menekannya. Padahal tanpa
+// koordinat, Gojek/Grab/Lalamove tidak bisa menghitung jarak sehingga TIDAK
+// MUNCUL sama sekali di pilihan ongkir — customer kehilangan opsi termurah
+// (mis. Lalamove Rp 14.400 vs J&T Rp 16.000) tanpa ada yang menyadarinya.
+//
+// Dicari dari kelurahan/kecamatan/kota, bukan dari nama jalan: nama jalan di
+// Indonesia sering tidak ada di OSM atau ambigu antar kota, sementara level
+// kelurahan hampir selalu ada dan ketelitiannya sudah lebih dari cukup untuk
+// menghitung tarif (selisih ratusan meter tidak menggeser harga).
+//
+// SENGAJA tidak pernah ditampilkan ke customer. Mereka tidak perlu tahu soal
+// lintang-bujur; yang mereka pedulikan adalah pilihan kurirnya muncul.
+async function geocodeAlamat(a: {
+  subdistrict: string; district: string; city: string; province: string;
+}): Promise<{ latitude: number; longitude: number } | null> {
+  const q = [a.subdistrict, a.district, a.city, a.province]
+    .map((x) => x?.trim()).filter(Boolean).join(", ");
+  if (q.length < 5) return null;
+  try {
+    // Dibatasi 4 detik: ini pelengkap, bukan syarat. Menyimpan alamat tidak
+    // boleh tertahan hanya karena layanan peta lambat.
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 4000);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=id&q=${encodeURIComponent(q)}`,
+      { headers: { "User-Agent": "TBK-Santi-Ecom/1.0 (tbksanti.id)" }, signal: ac.signal },
+    );
+    clearTimeout(t);
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const lat = parseFloat(rows[0].lat), lon = parseFloat(rows[0].lon);
+    // Jaga-jaga hasil nyasar ke luar Indonesia.
+    if (!(lat >= -11 && lat <= 6 && lon >= 95 && lon <= 141)) return null;
+    return { latitude: lat, longitude: lon };
+  } catch {
+    return null; // gagal = alamat tetap tersimpan, cuma tanpa opsi kurir instan
+  }
+}
+
 const EMPTY: AddressPayload = {
   label: "Rumah",
   recipient_name: "",
@@ -242,11 +285,18 @@ export function Alamat() {
     }
     setSaving(true);
     try {
+      // Lengkapi koordinat kalau belum ada (customer mengetik manual, bukan
+      // lewat GPS). Best-effort — kegagalan tidak membatalkan penyimpanan.
+      let payload = form;
+      if (typeof form.latitude !== "number" || typeof form.longitude !== "number") {
+        const titik = await geocodeAlamat(form);
+        if (titik) payload = { ...form, ...titik };
+      }
       if (editingId) {
-        await addressApi.update(editingId, form);
+        await addressApi.update(editingId, payload);
         toast.success("Alamat diperbarui");
       } else {
-        await addressApi.create(form);
+        await addressApi.create(payload);
         toast.success("Alamat ditambahkan");
       }
       setShowForm(false);

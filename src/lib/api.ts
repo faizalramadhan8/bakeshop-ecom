@@ -590,6 +590,12 @@ export interface AddressPayload {
   street_address: string;
   notes?: string;
   is_default: boolean;
+  /** Koordinat — diisi dari GPS atau hasil pencarian otomatis saat disimpan.
+   *  TIDAK PERNAH ditampilkan ke customer: mereka tidak perlu tahu soal
+   *  lintang-bujur, yang mereka pedulikan adalah pilihan kurirnya muncul.
+   *  Tanpa ini Gojek/Grab/Lalamove tidak bisa menghitung jarak. */
+  latitude?: number;
+  longitude?: number;
 }
 
 // Biteship Area — response dari GET /ecom/shipping/areas?q=...
