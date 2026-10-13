@@ -56,8 +56,17 @@ function actionsForStatus(status: string): Array<{ next: string; label: string; 
         { next: "cancelled", label: "Batalkan",      icon: Ban,   kind: "danger" },
       ];
     case "pending_payment":
+      // "Tandai Sudah Dibayar" WAJIB ada sejak transfer manual dipakai
+      // (13 Okt 2026). Tanpa ini pesanan transfer manual tidak punya jalan
+      // keluar sama sekali: customer sudah transfer dan mengunggah bukti,
+      // tapi satu-satunya tombol yang tersedia adalah Batalkan.
+      //
+      // Dulu masuk akal — pembayaran selalu lewat payment gateway, dan
+      // webhook PG yang menandai lunas. Begitu PG dimatikan, jalur itu
+      // tidak pernah berjalan.
       return [
-        { next: "cancelled", label: "Batalkan", icon: Ban, kind: "danger" },
+        { next: "paid",      label: "Tandai Sudah Dibayar", icon: Check, kind: "primary" },
+        { next: "cancelled", label: "Batalkan",             icon: Ban,   kind: "danger" },
       ];
     default:
       return [];
@@ -99,6 +108,7 @@ export function AdminPesananDetail() {
   const [error, setError] = useState<string | null>(null);
   const [showResiForm, setShowResiForm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showPaidConfirm, setShowPaidConfirm] = useState(false);
   const [showBiteshipConfirm, setShowBiteshipConfirm] = useState(false);
   const [syncingBiteship, setSyncingBiteship] = useState(false);
   const [awb, setAwb] = useState("");
@@ -137,6 +147,13 @@ export function AdminPesananDetail() {
       setShowCancelConfirm(true);
       return;
     }
+    // Menandai lunas juga perlu konfirmasi: dari sini barang mulai diproses
+    // dan dikirim, dan nilainya langsung masuk laporan keuangan. Bukti
+    // transfer gampang dipalsukan — yang menentukan tetap mutasi rekening.
+    if (next === "paid") {
+      setShowPaidConfirm(true);
+      return;
+    }
     setSaving(true);
     try {
       const updated = await adminApi.updateOrderStatus(order.id, next);
@@ -144,6 +161,21 @@ export function AdminPesananDetail() {
       toast.success("Status diperbarui");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal update");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmPaid = async () => {
+    if (!order) return;
+    setSaving(true);
+    try {
+      const updated = await adminApi.updateOrderStatus(order.id, "paid");
+      setOrder(updated);
+      toast.success("Pesanan ditandai sudah dibayar. Siap diproses.");
+      setShowPaidConfirm(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menandai lunas");
     } finally {
       setSaving(false);
     }
@@ -615,6 +647,39 @@ export function AdminPesananDetail() {
         )}
 
         {/* Cancel confirm inline (bukan JS alert supaya konsisten UI) */}
+        {/* Konfirmasi tandai lunas. Sengaja menyebut konsekuensinya, bukan
+            sekadar "Yakin?" — yang menentukan uang sudah masuk adalah mutasi
+            rekening, bukan gambar yang diunggah customer. */}
+        {showPaidConfirm && (
+          <div className="mt-3 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4">
+            <p className="text-sm font-bold text-emerald-800 mb-1">
+              Tandai pesanan ini sudah dibayar?
+            </p>
+            <p className="text-xs text-emerald-700 mb-3 leading-relaxed">
+              Pastikan uang <b>{formatRp(order.total)}</b> benar-benar sudah masuk
+              di mutasi rekening — bukti transfer bisa diedit. Setelah ini pesanan
+              siap diproses dan nilainya ikut terhitung di laporan keuangan.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={confirmPaid}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+                Ya, Sudah Masuk
+              </button>
+              <button
+                onClick={() => setShowPaidConfirm(false)}
+                className="px-4 py-2.5 rounded-xl border border-emerald-200 text-sm font-bold text-emerald-700"
+              >
+                <Undo size={14} className="inline mr-1" aria-hidden="true" />
+                Cek dulu
+              </button>
+            </div>
+          </div>
+        )}
+
         {showCancelConfirm && (
           <div className="mt-3 bg-red-50 border-2 border-red-200 rounded-2xl p-4">
             <p className="text-sm font-bold text-red-700 mb-1">Batalkan pesanan ini?</p>
