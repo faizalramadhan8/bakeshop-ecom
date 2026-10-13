@@ -28,21 +28,39 @@ function TransferManual({
 }) {
   const settings = usePublicSettings();
   const [uploading, setUploading] = useState(false);
+  const [tersalin, setTersalin] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Foto yang DIPILIH tapi belum dikirim. Memisahkan "memilih" dari
+  // "mengirim" penting: sebelumnya foto langsung terbang begitu dipilih,
+  // jadi salah pilih berarti bukti yang salah sudah masuk ke admin, dan
+  // customer tidak pernah sempat memeriksa yang mana yang dia kirim.
+  const [calon, setCalon] = useState<{ file: File; preview: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Lepas object URL supaya memori tidak menumpuk saat ganti foto berkali-kali.
+  useEffect(() => () => { if (calon) URL.revokeObjectURL(calon.preview); }, [calon]);
   const accounts = settings.bank_accounts ?? [];
   const waNumber = settings.wa_contact_number?.trim();
 
-  const salin = async (nomor: string) => {
+  // Tombolnya ikon saja, jadi keberhasilannya harus kelihatan di tombol itu
+  // sendiri — ikon berganti centang sebentar, bukan cuma toast yang gampang
+  // kelewat saat mata customer sudah pindah ke aplikasi m-banking.
+  const salinTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (salinTimer.current) window.clearTimeout(salinTimer.current); }, []);
+
+  const salin = async (nomor: string, idx: number) => {
     try {
       await navigator.clipboard.writeText(nomor.replace(/\s|-/g, ""));
+      setTersalin(idx);
+      if (salinTimer.current) window.clearTimeout(salinTimer.current);
+      salinTimer.current = window.setTimeout(() => setTersalin(null), 2000);
       toast.success("Nomor rekening disalin");
     } catch {
       toast.error("Gagal menyalin. Silakan catat manual.");
     }
   };
 
-  const pilihBerkas = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const pilihBerkas = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // boleh pilih berkas sama lagi setelah gagal
     if (!file) return;
@@ -55,10 +73,19 @@ function TransferManual({
       return;
     }
     setError(null);
+    if (calon) URL.revokeObjectURL(calon.preview);
+    setCalon({ file, preview: URL.createObjectURL(file) });
+  };
+
+  const kirim = async () => {
+    if (!calon) return;
+    setError(null);
     setUploading(true);
     try {
-      const { url } = await adminApi.uploadImage(file, "payment-proof");
+      const { url } = await adminApi.uploadImage(calon.file, "payment-proof");
       const updated = await ordersApi.submitPaymentProof(order.id, url);
+      URL.revokeObjectURL(calon.preview);
+      setCalon(null);
       onUploaded(updated);
       toast.success("Bukti transfer terkirim. Menunggu dicek admin.");
     } catch (err) {
@@ -83,11 +110,18 @@ function TransferManual({
                   <p className="text-lg font-black text-ink-900 tabular-nums break-all">{a.account_number}</p>
                   <button
                     type="button"
-                    onClick={() => salin(a.account_number)}
+                    onClick={() => salin(a.account_number, i)}
                     aria-label={`Salin nomor rekening ${a.bank_name}`}
-                    className="shrink-0 inline-flex items-center gap-1.5 min-h-11 px-3 rounded-xl border border-cherry-300 text-sm font-bold text-cherry-700 active:scale-95 transition-transform"
+                    title="Salin nomor rekening"
+                    className={`shrink-0 grid place-items-center h-11 w-11 rounded-xl border active:scale-95 transition-colors ${
+                      tersalin === i
+                        ? "border-green-300 bg-green-50 text-green-700"
+                        : "border-cherry-300 text-cherry-700"
+                    }`}
                   >
-                    <Copy size={15} aria-hidden="true" /> Salin
+                    {tersalin === i
+                      ? <Check size={18} aria-hidden="true" />
+                      : <Copy size={18} aria-hidden="true" />}
                   </button>
                 </div>
                 <p className="text-sm text-ink-700 mt-0.5">a.n. {a.account_holder}</p>
@@ -104,42 +138,113 @@ function TransferManual({
         </p>
       )}
 
+      {/* Tiga keadaan yang berbeda jelas, bukan satu tombol serba guna:
+          belum pilih → sudah pilih tapi belum kirim → sudah terkirim.
+          Memisahkan "memilih" dari "mengirim" membuat customer sempat
+          memeriksa foto mana yang dia kirim; sebelumnya foto langsung terbang
+          begitu dipilih dan salah pilih berarti bukti salah sudah sampai. */}
+      {/* Posisi customer dalam alurnya. Pertanyaan "sekarang gimana?" muncul
+          justru setelah mengunggah — tanpa penanda ini layar terlihat sama
+          saja sebelum dan sesudah, selain tulisan kecil. */}
+      <ol className="flex items-center gap-1 text-[11px] font-bold" aria-label="Status pembayaran">
+        {([
+          { t: "Transfer", aktif: true },
+          { t: "Kirim bukti", aktif: !!order.payment_proof },
+          { t: "Dikonfirmasi", aktif: false },
+        ]).map((l, i, arr) => (
+          <li key={l.t} className="flex items-center gap-1 min-w-0">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                l.aktif ? "bg-green-100 text-green-800" : "bg-ink-100 text-ink-500"
+              }`}
+            >
+              {l.aktif && <Check size={11} aria-hidden="true" />}
+              {l.t}
+            </span>
+            {i < arr.length - 1 && <span className="text-ink-300" aria-hidden="true">›</span>}
+          </li>
+        ))}
+      </ol>
+
       {order.payment_proof ? (
         <div className="rounded-xl border border-green-300 bg-green-50 p-3">
           <p className="text-sm font-bold text-green-800 flex items-center gap-1.5">
             <Check size={16} aria-hidden="true" /> Bukti transfer sudah terkirim
           </p>
           <p className="text-xs text-green-700 mt-0.5 leading-relaxed">
-            Admin akan mengecek dan mengonfirmasi pesananmu. Belum perlu melakukan apa-apa lagi.
+            Sekarang menunggu admin mencocokkan dengan mutasi rekening. Kamu akan
+            dikabari lewat email begitu pembayaran dikonfirmasi — tidak perlu
+            melakukan apa-apa lagi.
           </p>
-          <img
-            src={order.payment_proof}
-            alt="Bukti transfer yang kamu kirim"
-            loading="lazy"
-            className="mt-2 w-full max-w-[220px] rounded-lg border border-green-200"
-          />
+          {/* Bisa dibuka penuh: foto kecil sering tidak terbaca, dan customer
+              berhak memastikan yang terkirim memang bukti yang benar. */}
+          <a
+            href={order.payment_proof}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 block w-full max-w-[220px] rounded-lg border border-green-200 overflow-hidden"
+            aria-label="Buka bukti transfer ukuran penuh"
+          >
+            <img
+              src={order.payment_proof}
+              alt="Bukti transfer yang kamu kirim"
+              loading="lazy"
+              className="w-full"
+            />
+          </a>
+          <p className="text-[11px] text-green-700 mt-1">Ketuk gambar untuk memperbesar.</p>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="mt-2 text-xs font-bold text-ink-500 underline disabled:opacity-40"
+            className="mt-2 w-full min-h-11 inline-flex items-center justify-center gap-2 rounded-xl border border-green-300 bg-white text-sm font-bold text-green-800 active:scale-[0.98] transition-transform disabled:opacity-40"
           >
-            {uploading ? "Mengirim…" : "Ganti dengan foto lain"}
+            <Upload size={15} aria-hidden="true" /> Ganti Foto
           </button>
+        </div>
+      ) : calon ? (
+        <div className="rounded-xl border border-cherry-200 bg-white p-3">
+          <p className="text-sm font-bold text-ink-900 mb-2">Periksa dulu fotonya</p>
+          <img
+            src={calon.preview}
+            alt="Pratinjau bukti transfer yang akan dikirim"
+            className="w-full max-w-[220px] rounded-lg border border-cherry-100"
+          />
+          <p className="text-xs text-ink-500 mt-1.5 leading-snug">
+            Pastikan nominal <b className="text-ink-900">{formatRp(order.total)}</b> dan
+            tanggalnya terbaca jelas.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="min-h-12 px-4 rounded-xl border border-cherry-200 text-sm font-bold text-ink-700 active:scale-[0.98] transition-transform disabled:opacity-40"
+            >
+              Ganti Foto
+            </button>
+            <button
+              type="button"
+              onClick={kirim}
+              disabled={uploading}
+              className="flex-1 min-h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-cherry-600 text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
+            >
+              {uploading ? (
+                <><Clock size={16} className="animate-spin" aria-hidden="true" /> Mengirim…</>
+              ) : (
+                <><Check size={16} aria-hidden="true" /> Kirim Sekarang</>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         <div>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="w-full min-h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-cherry-600 text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
+            className="w-full min-h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-cherry-600 text-white text-sm font-bold active:scale-[0.98] transition-transform"
           >
-            {uploading ? (
-              <><Clock size={16} className="animate-spin" aria-hidden="true" /> Mengirim…</>
-            ) : (
-              <><Upload size={16} aria-hidden="true" /> Kirim Bukti Transfer</>
-            )}
+            <Upload size={16} aria-hidden="true" /> Pilih Foto Bukti Transfer
           </button>
           <p className="text-xs text-ink-500 mt-1.5 text-center">
             Bisa pilih dari galeri atau foto langsung. Maksimal 5 MB.
