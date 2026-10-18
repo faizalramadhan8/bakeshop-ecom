@@ -26,7 +26,7 @@ function TransferManual({
   onCancel: () => void;
   cancelling: boolean;
 }) {
-  const settings = usePublicSettings();
+  const settings = usePublicSettings(true); // layar bayar — rekening wajib ada
   const [uploading, setUploading] = useState(false);
   const [tersalin, setTersalin] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);

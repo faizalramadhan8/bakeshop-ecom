@@ -75,12 +75,28 @@ const DEFAULT_SETTINGS: PublicSettings = {
   payment_manual_enabled: true,
 };
 
-export function usePublicSettings(): PublicSettings {
+/**
+ * usePublicSettings — pengaturan storefront, di-cache 5 menit.
+ *
+ * @param wajibAdaRekening Paksa tarik ulang kalau daftar rekening kosong,
+ * mengabaikan cache. Dipakai HANYA di layar pembayaran.
+ *
+ * Alasannya: cache 5 menit sangat pas untuk teks banner atau nomor WA, tapi
+ * nomor rekening adalah data saat orang hendak membayar. Kalau halaman
+ * terbuka sebelum Bu Santi mengisi rekeningnya, customer melihat "Rekening
+ * tujuan belum tersedia" selama lima menit penuh — tanpa cara memaksa muat
+ * ulang, karena refresh pun membaca cache yang sama. Daftar rekening kosong
+ * juga bukan keadaan wajar untuk toko yang menerima transfer, jadi menariknya
+ * ulang tidak membebani apa pun dalam keadaan normal.
+ */
+export function usePublicSettings(wajibAdaRekening = false): PublicSettings {
   const [data, setData] = useState<PublicSettings>(() => readCache() || DEFAULT_SETTINGS);
 
   useEffect(() => {
-    // Kalau sudah ada cache fresh, skip fetch.
-    if (readCache()) return;
+    const cached = readCache();
+    const rekeningKosong = !cached?.bank_accounts || cached.bank_accounts.length === 0;
+    // Cache segar DAN tidak sedang dibutuhkan untuk membayar → tidak usah ambil.
+    if (cached && !(wajibAdaRekening && rekeningKosong)) return;
     let cancelled = false;
     request<PublicSettings>("GET", "/ecom/settings")
       .then((res) => {
@@ -92,7 +108,7 @@ export function usePublicSettings(): PublicSettings {
         // silent — pakai default. Cegah console spam ke customer.
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [wajibAdaRekening]);
 
   return data;
 }
