@@ -11,6 +11,7 @@ import { Alamat } from "@/pages/Alamat";
 import { Checkout } from "@/pages/Checkout";
 import { Pesanan } from "@/pages/Pesanan";
 import { PesananDetail } from "@/pages/PesananDetail";
+import { LacakPaket } from "@/pages/LacakPaket";
 import { AdminLogin } from "@/pages/AdminLogin";
 import { AdminDashboard } from "@/pages/AdminDashboard";
 import { AdminProdukList } from "@/pages/AdminProdukList";
@@ -62,6 +63,10 @@ export default function App() {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/pesanan" element={<Pesanan />} />
         <Route path="/pesanan/:id" element={<PesananDetail />} />
+        {/* Lacak paket di dalam aplikasi — menggantikan lemparan keluar ke
+            track.biteship.com. React Router v6 memeringkat rute per
+            kekhususan, jadi urutannya tidak berpengaruh di sini. */}
+        <Route path="/pesanan/:id/lacak" element={<LacakPaket />} />
         <Route path="/cari" element={<Cari />} />
         {/* Sprint 3 #11 — legal & info pages */}
         <Route path="/tentang" element={<TentangKami />} />

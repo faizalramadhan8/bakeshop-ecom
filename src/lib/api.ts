@@ -996,8 +996,29 @@ export const complaintApi = {
   listMine: () => request<Complaint[]>("GET", "/ecom/complaints", undefined, "customer"),
 };
 
+// Riwayat perjalanan paket dari Biteship. `history` urut TERLAMA dulu, sama
+// seperti yang Biteship kirim — halaman lacak yang membaliknya.
+export interface OrderTrackingEvent {
+  status: string;
+  /** Kalimat berbahasa Indonesia. Catatan asli Biteship berbahasa Inggris. */
+  label: string;
+  note: string;
+  updated_at: string;
+}
+
+export interface OrderTracking {
+  waybill_id: string;
+  courier: string;
+  status: string;
+  link: string;
+  history: OrderTrackingEvent[];
+}
+
 export const ordersApi = {
   list: () => request<CustomerOrderListItem[]>("GET", "/ecom/orders", undefined, "customer"),
+  /** Mengembalikan null kalau resi belum terbit — itu keadaan normal, bukan error. */
+  getTracking: (id: string) =>
+    request<OrderTracking | null>("GET", `/ecom/orders/${id}/tracking`, undefined, "customer"),
   getDetail: (id: string) => request<CustomerOrderDetail>("GET", `/ecom/orders/${id}`, undefined, "customer"),
   // Marketplace-style "Barang Diterima". Body kosong; ownership via JWT.
   confirmReceived: (id: string) =>

@@ -6,7 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { ordersApi, accountApi, complaintApi, adminApi, formatRp, formatETD, type ComplaintReason, type CustomerOrderDetail } from "@/lib/api";
+import { ordersApi, accountApi, complaintApi, adminApi, formatRp, formatETD, type ComplaintReason, type CustomerOrderDetail, type OrderTrackingEvent } from "@/lib/api";
 import { usePublicSettings } from "@/lib/publicSettings";
 
 // ─── Transfer manual ─────────────────────────────────────────────────────────
@@ -299,16 +299,56 @@ function TransferManual({
 
 // Map courier name (case-insensitive substring) → tracking URL template.
 // Return null kalau kurir tidak dikenal — FE hide tombol lacak.
-function trackingURL(courier: string, awb: string): string | null {
-  if (!awb) return null;
-  const c = courier.toLowerCase();
-  if (c.includes("jne")) return `https://www.jne.co.id/tracking/trace/${encodeURIComponent(awb)}`;
-  if (c.includes("j&t") || c.includes("jnt")) return `https://www.jet.co.id/track?awb=${encodeURIComponent(awb)}`;
-  if (c.includes("sicepat")) return `https://www.sicepat.com/checkAwb/${encodeURIComponent(awb)}`;
-  if (c.includes("anteraja")) return `https://anteraja.id/tracking?awb=${encodeURIComponent(awb)}`;
-  if (c.includes("ninja")) return `https://www.ninjaxpress.co/id-id/tracking?id=${encodeURIComponent(awb)}`;
-  if (c.includes("pos")) return `https://www.posindonesia.co.id/id/tracking?resi=${encodeURIComponent(awb)}`;
-  return null;
+// PeristiwaTerakhir — satu baris status terbaru dari kurir.
+//
+// Sengaja satu baris: yang dicari orang di halaman pesanan adalah jawaban
+// cepat, bukan riwayat lengkap. Riwayatnya ada di halaman Lacak Paket.
+//
+// Gagal memuat TIDAK menampilkan apa pun — ini informasi tambahan, dan pesan
+// kesalahan di sini cuma menakuti orang tentang pesanan yang sebenarnya
+// baik-baik saja.
+function PeristiwaTerakhir({ orderId }: { orderId: string }) {
+  const [item, setItem] = useState<OrderTrackingEvent | null>(null);
+
+  useEffect(() => {
+    let batal = false;
+    ordersApi
+      .getTracking(orderId)
+      .then((d) => {
+        if (batal || !d || d.history.length === 0) return;
+        setItem(d.history[d.history.length - 1]);
+      })
+      .catch(() => {});
+    return () => {
+      batal = true;
+    };
+  }, [orderId]);
+
+  if (!item) return null;
+  return (
+    <div className="flex items-start gap-2 mt-2 p-3 rounded-xl bg-cherry-50 border border-cherry-100">
+      <Truck size={14} className="text-cherry-500 shrink-0 mt-0.5" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-ink-900 leading-snug">{item.label}</p>
+        <p className="text-xs text-ink-500 mt-0.5">{formatTimeRelative(item.updated_at)}</p>
+      </div>
+    </div>
+  );
+}
+
+// formatTimeRelative — "2 jam lalu" lebih cepat dicerna daripada tanggal
+// lengkap saat yang ditanya adalah "barusan atau kemarin?".
+function formatTimeRelative(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const menit = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (menit < 1) return "baru saja";
+  if (menit < 60) return `${menit} menit lalu`;
+  const jam = Math.floor(menit / 60);
+  if (jam < 24) return `${jam} jam lalu`;
+  const hari = Math.floor(jam / 24);
+  if (hari < 7) return `${hari} hari lalu`;
+  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
 }
 
 const STATUS_STEPS = ["pending_payment", "paid", "processing", "shipped", "delivered", "completed"];
@@ -758,20 +798,21 @@ export function PesananDetail() {
                 <Copy size={12} aria-hidden="true" /> Salin
               </button>
             </div>
-            {/* Prefer Biteship public tracking link — sudah include peta +
-                history + auto-refresh, jauh lebih baik dari web kurir manual.
-                Fallback ke tracking URL per courier kalau Biteship link belum ada. */}
-            {(order.shipping.tracking_url || trackingURL(order.shipping.courier, order.shipping.awb)) && (
-              <a
-                href={order.shipping.tracking_url || trackingURL(order.shipping.courier, order.shipping.awb)!}
-                target="_blank"
-                rel="noopener"
-                className="inline-flex items-center gap-1.5 mt-1 px-3 py-2 rounded-lg text-xs font-bold text-cherry-500 border border-cherry-200 hover:bg-cherry-50"
-              >
-                <Truck size={12} aria-hidden="true" />
-                Lacak Paket
-              </a>
-            )}
+            {/* Peristiwa terakhir dari kurir, langsung di halaman ini —
+                pertanyaan "sampai mana?" dijawab tanpa perlu membuka apa pun.
+                Halaman lacak menyajikan riwayat lengkapnya. */}
+            <PeristiwaTerakhir orderId={order.id} />
+            {/* Lacak paket sekarang di DALAM aplikasi. Dulu tombol ini
+                melempar keluar ke track.biteship.com — halaman berbahasa
+                Inggris, tanpa merek toko, dan tanpa jalan kembali. Tautan
+                resmi kurir tetap tersedia di halaman lacak sebagai cadangan. */}
+            <Link
+              to={`/pesanan/${order.id}/lacak`}
+              className="inline-flex items-center gap-1.5 mt-1 min-h-11 px-4 rounded-xl text-sm font-bold text-cherry-600 border border-cherry-200 active:scale-[0.98]"
+            >
+              <Truck size={14} aria-hidden="true" />
+              Lacak Paket
+            </Link>
           </div>
         )}
       </div>

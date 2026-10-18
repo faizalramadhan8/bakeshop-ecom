@@ -120,9 +120,14 @@ export function Produk() {
     );
   }
 
-  // Effective price berdasar qty (grosir tier eligible).
-  const effectivePrice = getBestTierPrice(product, qty);
-  const savings = (product.price - effectivePrice) * qty;
+  // Harga efektif berdasar qty (grosir mode paket).
+  const harga = hitungHargaPaket(product, qty);
+  const effectivePrice = harga.unitPrice;
+  const savings = Math.round(product.price * qty) - harga.lineTotal;
+  // Tier berikutnya yang belum tercapai — untuk ajakan "tambah N lagi".
+  const tierBerikut = (product.tiers ?? [])
+    .filter((t) => t.min_qty > qty && t.price < product.price)
+    .sort((a, b) => a.min_qty - b.min_qty)[0];
 
   const handleAdd = async () => {
     if (!product) return;
@@ -301,19 +306,51 @@ export function Produk() {
                   Harga Grosir
                 </p>
               </div>
+              {/* Ditulis sebagai TOTAL per paket, bukan "≥ N → Rp X/pcs".
+                  Itu cara Bu Santi memasangnya ("beli 3 = 149.000") dan cara
+                  customer membacanya. Harga satuannya tetap ditulis kecil di
+                  belakang supaya tetap bisa dibandingkan. */}
               <div className="space-y-1">
-                {product.tiers.map((t, i) => (
-                  <p key={i} className="text-sm text-ink-900">
-                    Beli ≥ <b>{t.min_qty}</b>{" "}
-                    <span className="text-ink-500">→ {formatRp(t.price)}/pcs</span>
-                    {qty >= t.min_qty && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-xs font-bold text-cherry-500">
-                        <Check size={12} aria-hidden="true" /> aktif
-                      </span>
-                    )}
-                  </p>
-                ))}
+                {[...product.tiers]
+                  .sort((a, b) => a.min_qty - b.min_qty)
+                  .map((t, i) => {
+                    const aktif = harga.tier?.min_qty === t.min_qty && harga.paket > 0;
+                    return (
+                      <p key={i} className="text-sm text-ink-900">
+                        Beli <b>{t.min_qty}</b> = <b>{formatRp(t.price * t.min_qty)}</b>{" "}
+                        <span className="text-ink-500 text-xs">({formatRp(t.price)}/pcs)</span>
+                        {aktif && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-xs font-bold text-cherry-500">
+                            <Check size={12} aria-hidden="true" /> aktif
+                          </span>
+                        )}
+                      </p>
+                    );
+                  })}
               </div>
+
+              {/* Rincian saat paketnya pecah — tanpa ini angka "hemat" terlihat
+                  seperti salah hitung buat orang yang beli 3 dari paket 2. */}
+              {harga.tier && harga.paket > 0 && harga.extra > 0 && (
+                <p className="text-xs text-ink-500 mt-2 leading-relaxed">
+                  {harga.paket} paket × {harga.tier.min_qty} ={" "}
+                  {formatRp(harga.paket * harga.tier.min_qty * harga.tier.price)} + {harga.extra}{" "}
+                  satuan × {formatRp(product.price)}
+                </p>
+              )}
+
+              {/* Ajakan ke paket berikutnya — ini yang mendorong pembelian
+                  kartonan, tujuan yang Bu Santi sebut sendiri. */}
+              {tierBerikut && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="text-xs font-bold text-amber-700 mt-2 leading-relaxed"
+                >
+                  Tambah {tierBerikut.min_qty - qty} lagi → {tierBerikut.min_qty} ={" "}
+                  {formatRp(tierBerikut.price * tierBerikut.min_qty)}
+                </p>
+              )}
             </div>
           )}
 
@@ -472,7 +509,7 @@ export function Produk() {
             disabled={adding}
             className="flex-1 min-w-0 flex items-center justify-center gap-1 h-11 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-60 active:scale-[0.98] transition-transform"
           >
-            <span className="truncate">Beli · {formatRp(effectivePrice * qty)}</span>
+            <span className="truncate">Beli · {formatRp(harga.lineTotal)}</span>
           </button>
         </div>
       </div>
@@ -480,12 +517,47 @@ export function Produk() {
   );
 }
 
-// Greedy match tier: pilih min_qty tertinggi yang qty >= min_qty. Sesuai
-// pattern computeBestUnitPrice di POS bakeshop-fe (all_customers scope).
-function getBestTierPrice(product: EcomProductDetail, qty: number): number {
-  if (!product.tiers || product.tiers.length === 0) return product.price;
-  const eligible = product.tiers.filter((t) => qty >= t.min_qty);
-  if (eligible.length === 0) return product.price;
-  const best = eligible.reduce((a, b) => (a.min_qty > b.min_qty ? a : b));
-  return best.price < product.price ? best.price : product.price;
+// Harga grosir mode PAKET — tier berlaku HANYA dalam kelipatan min_qty,
+// sisanya harga normal. "Beli 2 dapat 33rb" berarti 2 = 33rb, 3 = 33rb + 1
+// satuan, 4 = 66rb.
+//
+// Sampai 18 Okt 2026 fungsi ini memakai aturan lama "sekali lewat ambang,
+// SEMUA unit dapat harga grosir" — aturan yang Bu Santi tolak 21 Jun 2026 di
+// kasir, tapi tidak pernah ikut diganti di storefront. Akibatnya halaman ini
+// mengutip angka yang lebih murah daripada yang ditagih checkout.
+//
+// Harus tetap sejalan dengan computeEcomLinePrice di backend. Kalau salah satu
+// diubah, ubah dua-duanya — selisihnya baru ketahuan customer di layar bayar.
+type HargaPaket = {
+  lineTotal: number;
+  unitPrice: number;   // rata-rata, untuk ditampilkan sebagai harga satuan
+  paket: number;
+  extra: number;
+  tier: { min_qty: number; price: number; note?: string } | null;
+};
+
+function hitungHargaPaket(product: EcomProductDetail, qty: number): HargaPaket {
+  const polos: HargaPaket = {
+    lineTotal: Math.round(product.price * qty),
+    unitPrice: product.price,
+    paket: 0,
+    extra: qty,
+    tier: null,
+  };
+  if (!product.tiers || product.tiers.length === 0 || qty <= 0) return polos;
+
+  // Greedy: min_qty terbesar yang muat; kalau seri, harga terendah menang.
+  const muat = product.tiers.filter((t) => t.min_qty > 0 && qty >= t.min_qty);
+  if (muat.length === 0) return polos;
+  const best = muat.reduce((a, b) =>
+    b.min_qty > a.min_qty || (b.min_qty === a.min_qty && b.price < a.price) ? b : a
+  );
+  if (best.price >= product.price) return polos;
+
+  const paket = Math.floor(qty / best.min_qty);
+  const extra = qty % best.min_qty;
+  // Dibulatkan ke rupiah utuh — harga tier tersimpan hasil bagi (mis. "beli 3
+  // = 29.000" → 9.666,67), tanpa ini totalnya meleset satu sen.
+  const lineTotal = Math.round(paket * best.min_qty * best.price + extra * product.price);
+  return { lineTotal, unitPrice: lineTotal / qty, paket, extra, tier: best };
 }
