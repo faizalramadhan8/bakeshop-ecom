@@ -39,6 +39,14 @@ export function decodeToken(): { role?: string; email?: string; fullname?: strin
 
 type Scope = "admin" | "customer" | "public";
 
+/**
+ * @param scope WAJIB disebut untuk endpoint ber-auth. Bawaannya "public"
+ * = tanpa token, dan lupa menyebutnya TIDAK bikin gagal kompilasi — cuma
+ * 401 saat dipakai. Sepuluh method panel rumah pernah kena ini sekaligus
+ * (24 Okt 2026): endpointnya benar, tokennya tidak pernah ikut terkirim.
+ * Semua path `/ecom/admin/*` memakai "admin"; `/ecom/orders`, `/ecom/cart`,
+ * dan alamat customer memakai "customer".
+ */
 export async function request<T = unknown>(
   method: string,
   path: string,
@@ -97,13 +105,13 @@ export const adminApi = {
   // pernah terlihat di POS, dan produk Bekasi tidak pernah terlihat di sini.
   // Backend menolak id produk Bekasi dengan "tidak ditemukan".
   createProduct: (data: Record<string, unknown>) =>
-    request<EcomAdminProduct>("POST", "/ecom/admin/products", data),
+    request<EcomAdminProduct>("POST", "/ecom/admin/products", data, "admin"),
 
   updateProduct: (id: string, data: Record<string, unknown>) =>
-    request<EcomAdminProduct>("PUT", `/ecom/admin/products/${id}`, data),
+    request<EcomAdminProduct>("PUT", `/ecom/admin/products/${id}`, data, "admin"),
 
   deleteProduct: (id: string) =>
-    request<null>("DELETE", `/ecom/admin/products/${id}`),
+    request<null>("DELETE", `/ecom/admin/products/${id}`, undefined, "admin"),
 
   /**
    * Satu-satunya jalur ubah stok. Wajib alasan dan menulis jejak ke
@@ -111,27 +119,27 @@ export const adminApi = {
    * form yang bisa menimpa stok diam-diam.
    */
   adjustStock: (id: string, data: { new_stock: number; reason: string; note?: string }) =>
-    request<unknown>("POST", `/ecom/admin/products/${id}/adjust-stock`, data),
+    request<unknown>("POST", `/ecom/admin/products/${id}/adjust-stock`, data, "admin"),
 
   // ─── Harga grosir (kartonan) produk rumah ──────────────────────────────
   // Backend memaksa target 'all_customers': toko rumah tidak punya konsep
   // member POS, dan storefront memang hanya membaca tier itu.
   listTiers: (productId: string) =>
-    request<EcomPriceTier[]>("GET", `/ecom/admin/products/${productId}/tiers`),
+    request<EcomPriceTier[]>("GET", `/ecom/admin/products/${productId}/tiers`, undefined, "admin"),
 
   createTier: (productId: string, data: TierPayload) =>
-    request<EcomPriceTier>("POST", `/ecom/admin/products/${productId}/tiers`, data),
+    request<EcomPriceTier>("POST", `/ecom/admin/products/${productId}/tiers`, data, "admin"),
 
   updateTier: (productId: string, tierId: string, data: TierPayload) =>
-    request<EcomPriceTier>("PUT", `/ecom/admin/products/${productId}/tiers/${tierId}`, data),
+    request<EcomPriceTier>("PUT", `/ecom/admin/products/${productId}/tiers/${tierId}`, data, "admin"),
 
   deleteTier: (productId: string, tierId: string) =>
-    request<null>("DELETE", `/ecom/admin/products/${productId}/tiers/${tierId}`),
+    request<null>("DELETE", `/ecom/admin/products/${productId}/tiers/${tierId}`, undefined, "admin"),
 
   /** Kategori + pemasok POS — dipakai bersama kedua tempat. */
   catalogRefs: () =>
     request<{ categories: { id: string; name: string }[]; suppliers: { id: string; name: string }[] }>(
-      "GET", "/ecom/admin/catalog-refs"),
+      "GET", "/ecom/admin/catalog-refs", undefined, "admin"),
 
   listStockMovements: (params?: { type?: string; page?: number; limit?: number }) => {
     const q = new URLSearchParams();
@@ -139,7 +147,7 @@ export const adminApi = {
     if (params?.page) q.set("page", String(params.page));
     if (params?.limit) q.set("limit", String(params.limit));
     const qs = q.toString();
-    return request<EcomStockMovement[]>("GET", `/ecom/admin/stock-movements${qs ? `?${qs}` : ""}`);
+    return request<EcomStockMovement[]>("GET", `/ecom/admin/stock-movements${qs ? `?${qs}` : ""}`, undefined, "admin");
   },
 
   getProduct: (id: string) =>
