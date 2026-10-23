@@ -26,6 +26,11 @@ export function AdminProdukBaru() {
     categories: [],
     suppliers: [],
   });
+  // Kategori ETALASE — yang menentukan produk muncul di kelompok mana di
+  // storefront, dan yang punya CRUD-nya sendiri di menu Kategori. Kategori
+  // POS sengaja TIDAK ditanyakan: di toko Bu Santi isinya nama-nama pemasok,
+  // tidak bermakna untuk produk rumah, dan backend mengisinya sendiri.
+  const [katEtalase, setKatEtalase] = useState<{ id: string; name_id?: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [f, setF] = useState({
@@ -33,7 +38,7 @@ export function AdminProdukBaru() {
     barcode: "",
     name: "",
     name_id: "",
-    category_id: "",
+    ecom_category_id: "",
     supplier_id: "",
     unit: "pcs",
     purchase_price: "",
@@ -81,20 +86,20 @@ export function AdminProdukBaru() {
     // dropdown kosong berarti produk tidak bisa dibuat sama sekali — dan
     // tanpa pesan, itu terlihat seperti "memang belum ada kategorinya".
     adminApi
+      .listCategories()
+      .then((c) => setKatEtalase(c || []))
+      .catch(() => {});
+    adminApi
       .catalogRefs()
       .then((d) => {
         setRefs(d);
-        setRefsGagal(
-          d.categories.length === 0
-            ? "Daftar kategori kosong. Buat dulu kategorinya di aplikasi POS (Stok → Kategori)."
-            : null,
-        );
+        setRefsGagal(null);
       })
       .catch((e) =>
         setRefsGagal(
           e instanceof Error
-            ? `Gagal memuat kategori: ${e.message}`
-            : "Gagal memuat daftar kategori.",
+            ? `Gagal memuat daftar pemasok: ${e.message}`
+            : "Gagal memuat daftar pemasok.",
         ),
       );
   }, []);
@@ -106,7 +111,7 @@ export function AdminProdukBaru() {
   const kurang: string[] = [];
   if (!f.sku.trim()) kurang.push("Kode (SKU)");
   if (!f.name.trim()) kurang.push("Nama produk");
-  if (!f.category_id) kurang.push("Kategori");
+  if (!f.ecom_category_id) kurang.push("Kategori etalase");
   if (!f.unit) kurang.push("Satuan");
 
   const simpan = async () => {
@@ -122,7 +127,9 @@ export function AdminProdukBaru() {
         // name_id dipakai di seluruh storefront. Dikosongkan = produk tampil
         // tanpa nama di etalase, jadi jatuh ke `name`.
         name_id: f.name_id.trim() || f.name.trim(),
-        category_id: f.category_id,
+        // category_id sengaja TIDAK dikirim — backend mengisinya dengan
+        // kategori penampung "Toko Rumah".
+        ecom_category_id: f.ecom_category_id || undefined,
         supplier_id: f.supplier_id || undefined,
         unit: f.unit,
         purchase_price: num(f.purchase_price),
@@ -221,13 +228,17 @@ export function AdminProdukBaru() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={lbl}>Kategori *</label>
-              <select value={f.category_id} onChange={(e) => set("category_id", e.target.value)} className={inp}>
+              <label className={lbl}>Kategori etalase *</label>
+              <select value={f.ecom_category_id} onChange={(e) => set("ecom_category_id", e.target.value)} className={inp}>
                 <option value="">— pilih —</option>
-                {refs.categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                {katEtalase.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name_id || c.name}</option>
                 ))}
               </select>
+              <p className="text-xs text-ink-500 mt-1 leading-relaxed">
+                Menentukan produk muncul di kelompok mana di etalase. Kelola
+                daftarnya di menu <b className="text-ink-900">Kategori</b>.
+              </p>
             </div>
             <div>
               <label className={lbl}>Pemasok</label>
