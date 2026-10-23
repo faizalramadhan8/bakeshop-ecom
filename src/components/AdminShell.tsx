@@ -23,6 +23,7 @@ import {
 import { setToken, decodeToken, adminApi, type EcomAdminDashboardStats } from "@/lib/api";
 import { useAdminTheme, clearAdminTheme } from "@/lib/adminTheme";
 import { CommandPalette } from "./CommandPalette";
+import { usePublicSettings } from "@/lib/publicSettings";
 
 type NavItem = {
   to: string;
@@ -253,17 +254,31 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({ badges, isSuperadmin, onLogout, currentPath, theme, onToggleTheme }: SidebarContentProps) {
+  const pengaturan = usePublicSettings();
+  const logoToko = pengaturan.store_logo?.trim() || "";
+  const namaToko = pengaturan.store_name?.trim() || "Toko Bahan Kue";
   return (
     <>
       {/* Brand */}
       <div className="p-5 border-b border-cherry-100">
+        {/* Logo + nama toko dari Pengaturan, bukan ditulis di kode.
+            Dulu kotak ini berisi ikon umum dan teks "TBK Santi" yang tetap —
+            jadi setelah Bu Santi mengganti logo dan nama, panelnya masih
+            memakai identitas lama dan terlihat seperti logonya tidak tersimpan. */}
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cherry-400 to-cherry-500 flex items-center justify-center text-white shrink-0">
-            <LayoutDashboard size={18} />
+          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 grid place-items-center">
+            {logoToko ? (
+              <img src={logoToko} alt="" width={40} height={40}
+                className="w-full h-full object-contain" />
+            ) : (
+              <span className="w-full h-full rounded-xl bg-gradient-to-br from-cherry-400 to-cherry-500 grid place-items-center text-white">
+                <LayoutDashboard size={18} />
+              </span>
+            )}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-black text-ink-900 leading-tight">Ecom Admin</p>
-            <p className="text-xs text-ink-500 truncate">TBK Santi</p>
+            <p className="text-sm font-black text-ink-900 leading-tight">Admin Toko</p>
+            <p className="text-xs text-ink-500 truncate">{namaToko}</p>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Save } from "lucide-react";
+import { AlertCircle, Save, Image as ImageIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import { AdminShell } from "@/components/AdminShell";
 import { adminApi } from "@/lib/api";
@@ -43,9 +43,60 @@ export function AdminProdukBaru() {
     qty_per_box: "",
     ecom_weight_grams: "",
   });
+  // Foto produk. Ditaruh di form tambah, bukan hanya di halaman edit —
+  // menyimpan produk lalu harus pindah halaman cuma untuk memberinya foto
+  // adalah langkah yang mudah terlupakan, dan produk tanpa foto di etalase
+  // nyaris tidak pernah diklik.
+  const [foto, setFoto] = useState<string>("");
+  const [fotoUnggah, setFotoUnggah] = useState(false);
+  const fotoRef = useRef<HTMLInputElement>(null);
 
+  const pilihFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) {
+      setError("Foto harus JPG, PNG, atau WEBP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Ukuran foto maksimal 5 MB.");
+      return;
+    }
+    setError(null);
+    setFotoUnggah(true);
+    try {
+      const { url } = await adminApi.uploadImage(file, "products");
+      setFoto(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengunggah foto.");
+    } finally {
+      setFotoUnggah(false);
+    }
+  };
+
+  const [refsGagal, setRefsGagal] = useState<string | null>(null);
   useEffect(() => {
-    adminApi.catalogRefs().then(setRefs).catch(() => {});
+    // Kegagalan di sini TIDAK boleh diam. Kategori wajib diisi, jadi
+    // dropdown kosong berarti produk tidak bisa dibuat sama sekali — dan
+    // tanpa pesan, itu terlihat seperti "memang belum ada kategorinya".
+    adminApi
+      .catalogRefs()
+      .then((d) => {
+        setRefs(d);
+        setRefsGagal(
+          d.categories.length === 0
+            ? "Daftar kategori kosong. Buat dulu kategorinya di aplikasi POS (Stok → Kategori)."
+            : null,
+        );
+      })
+      .catch((e) =>
+        setRefsGagal(
+          e instanceof Error
+            ? `Gagal memuat kategori: ${e.message}`
+            : "Gagal memuat daftar kategori.",
+        ),
+      );
   }, []);
 
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
@@ -79,6 +130,7 @@ export function AdminProdukBaru() {
         stock: num(f.stock),
         min_stock: num(f.min_stock),
         qty_per_box: num(f.qty_per_box) || 1,
+        image: foto,
       });
       toast.success("Produk tersimpan");
       // Langsung ke halaman edit: harga online, foto, dan deskripsi etalase
@@ -102,6 +154,12 @@ export function AdminProdukBaru() {
       parents={[{ label: "Produk", to: "/admin/produk" }]}
     >
       <div className="max-w-2xl space-y-4">
+        {refsGagal && (
+          <p role="alert" className="flex items-start gap-2 text-sm font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" aria-hidden="true" />
+            {refsGagal}
+          </p>
+        )}
         <section className="bg-white rounded-2xl border border-cherry-200 p-5 space-y-3">
           <h2 className="text-sm font-black text-ink-900">Identitas</h2>
           <div className="grid grid-cols-2 gap-3">
@@ -127,6 +185,40 @@ export function AdminProdukBaru() {
             <input value={f.name_id} onChange={(e) => set("name_id", e.target.value)} className={inp}
               placeholder="Kosongkan = sama dengan nama produk" />
           </div>
+          {/* Foto — storefront memakai foto khusus etalase kalau ada, dan
+              jatuh ke foto ini kalau belum. Jadi satu unggahan di sini sudah
+              cukup untuk produk tampil berfoto. */}
+          <div>
+            <label className={lbl}>Foto Produk</label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="w-20 h-20 rounded-xl border border-cherry-200 bg-cherry-50/40 grid place-items-center overflow-hidden shrink-0">
+                {foto ? (
+                  <img src={foto} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon size={22} className="text-cherry-300" aria-hidden="true" />
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button type="button" onClick={() => fotoRef.current?.click()} disabled={fotoUnggah}
+                  className="min-h-11 px-4 rounded-xl border border-cherry-300 text-sm font-bold text-cherry-700 disabled:opacity-40 active:scale-[0.98]">
+                  {fotoUnggah ? "Mengunggah…" : foto ? "Ganti Foto" : "Unggah Foto"}
+                </button>
+                {foto && (
+                  <button type="button" onClick={() => setFoto("")} disabled={fotoUnggah}
+                    className="min-h-11 px-4 rounded-xl border border-cherry-200 text-sm font-bold text-ink-500 disabled:opacity-40">
+                    Hapus
+                  </button>
+                )}
+              </div>
+            </div>
+            <input ref={fotoRef} type="file" accept="image/jpeg,image/png,image/webp"
+              onChange={pilihFoto} className="hidden" />
+            <p className="text-xs text-ink-500 mt-1.5 leading-relaxed">
+              Opsional, tapi produk tanpa foto jarang diklik. Bisa ditambah atau diganti
+              nanti di halaman edit, berikut foto tambahan untuk galeri.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Kategori *</label>
