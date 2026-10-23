@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "@/lib/cartStore";
 import { BakeryLogo } from "./BakeryLogo";
+import { usePublicSettings } from "@/lib/publicSettings";
 
 export function Header() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const { cart } = useCart();
   const cartCount = cart?.total_qty || 0;
+  const namaToko = usePublicSettings().store_name?.trim() || "Toko Bahan Kue";
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,11 +21,19 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-cherry-100">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-        {/* Logo */}
+        {/* Logo + nama toko.
+            Namanya ditulis sebagai teks karena logo Bu Santi memuat enam
+            baris tulisan di dalamnya — di 36 px semuanya jadi semburat, dan
+            tanpa teks pendamping header tidak punya identitas yang terbaca.
+            Disembunyikan di layar sempit supaya kolom pencarian tidak
+            terdesak; di situ logonya sendiri yang jadi penanda. */}
         <Link to="/" className="shrink-0 flex items-center gap-2">
           <div className="rounded-xl overflow-hidden shrink-0">
             <BakeryLogo size={36} />
           </div>
+          <span className="hidden sm:block text-sm font-black text-ink-900 leading-tight max-w-[12ch] truncate">
+            {namaToko}
+          </span>
         </Link>
 
         {/* Search */}

@@ -22,6 +22,8 @@ export interface PublicSettings {
    *  belum mengisi rekening — customer tidak punya cara membayar, jadi
    *  halaman pesanan harus menyuruhnya menghubungi admin. */
   bank_accounts?: { bank_name: string; account_number: string; account_holder: string }[];
+  /** URL logo toko. Kosong = pakai logo bawaan yang digambar di kode. */
+  store_logo?: string | null;
   // Sprint 5 Chunk 7 — Homepage CMS
   hero_kicker?: string;
   hero_title?: string;

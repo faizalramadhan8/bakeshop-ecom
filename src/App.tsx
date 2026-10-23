@@ -16,6 +16,8 @@ import { AdminLogin } from "@/pages/AdminLogin";
 import { AdminDashboard } from "@/pages/AdminDashboard";
 import { AdminProdukList } from "@/pages/AdminProdukList";
 import { AdminProdukEdit } from "@/pages/AdminProdukEdit";
+import { AdminProdukBaru } from "@/pages/AdminProdukBaru";
+import { AdminPergerakanStok } from "@/pages/AdminPergerakanStok";
 import { AdminKategori } from "@/pages/AdminKategori";
 import { AdminPesananList } from "@/pages/AdminPesananList";
 import { AdminPesananDetail } from "@/pages/AdminPesananDetail";
@@ -82,7 +84,12 @@ export default function App() {
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/admin/produk" element={<AdminProdukList />} />
+      {/* URUTAN: "baru" harus SEBELUM ":id", kalau tidak kata "baru"
+          ke-match sebagai id produk dan halaman tambah tidak pernah terbuka.
+          Pola yang sama seperti /admin/pesanan/print. */}
+      <Route path="/admin/produk/baru" element={<AdminProdukBaru />} />
       <Route path="/admin/produk/:id" element={<AdminProdukEdit />} />
+      <Route path="/admin/pergerakan-stok" element={<AdminPergerakanStok />} />
       <Route path="/admin/kategori" element={<AdminKategori />} />
       <Route path="/admin/pesanan" element={<AdminPesananList />} />
       {/* Print route HARUS sebelum :id supaya "print" tidak ke-match sebagai order ID */}

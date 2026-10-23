@@ -2,7 +2,7 @@
 // Konfigurasi storefront (min order, WA contact, announcement bar, payment
 // toggles, store info). Singleton row di BE (id='default').
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Save, Loader2, Info, MessageCircle, ShoppingCart, Store,
   Megaphone, CreditCard, Mail, AlertCircle, Home, Package, Tag, X, Search,
@@ -132,6 +132,14 @@ export function AdminEcomSettings() {
               value={data.store_name}
               onChange={(e) => patch("store_name", e.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-cherry-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-cherry-500/30"
+            />
+          </Field>
+          {/* Logo. Disimpan sebagai URL hasil upload, bukan berkas di kode —
+              Bu Santi minta logonya bisa diganti sendiri tanpa deploy. */}
+          <Field label="Logo Toko" hint="Tampil di bagian atas storefront. Kosongkan untuk memakai logo bawaan.">
+            <LogoUploader
+              nilai={data.store_logo || null}
+              onGanti={(url) => patch("store_logo", url)}
             />
           </Field>
           <Field label="Email Toko" hint="Untuk reply-to email order confirmation.">
@@ -733,6 +741,113 @@ function MultiSelectChips({
       )}
 
       {hint && <p className="text-xs text-ink-500 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+
+// ─── Pengunggah logo ──────────────────────────────────────────────────────
+//
+// Berkasnya lewat endpoint upload yang sudah ada, sama seperti foto produk
+// dan bukti transfer; yang disimpan di pengaturan cuma URL-nya.
+//
+// Pratinjau memakai latar kotak-kotak supaya logo berlatar putih atau
+// transparan tetap kelihatan batasnya — logo Bu Santi bundar dengan latar
+// putih, dan tanpa ini tampak seperti tidak ada gambar yang terunggah.
+function LogoUploader({
+  nilai, onGanti,
+}: {
+  nilai: string | null;
+  onGanti: (url: string | null) => void;
+}) {
+  const [unggah, setUnggah] = useState(false);
+  const [salah, setSalah] = useState<string | null>(null);
+  const ref = useRef<HTMLInputElement>(null);
+
+  const pilih = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // boleh pilih berkas sama lagi setelah gagal
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/i.test(file.type)) {
+      setSalah("Logo harus berupa gambar PNG, JPG, WEBP, atau SVG.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setSalah("Ukuran logo maksimal 2 MB.");
+      return;
+    }
+    setSalah(null);
+    setUnggah(true);
+    try {
+      const { url } = await adminApi.uploadImage(file, "store-logo");
+      onGanti(url);
+      toast.success("Logo terunggah — jangan lupa tekan Simpan");
+    } catch (err) {
+      setSalah(err instanceof Error ? err.message : "Gagal mengunggah logo.");
+    } finally {
+      setUnggah(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div
+          className="w-20 h-20 rounded-xl border border-cherry-200 grid place-items-center overflow-hidden shrink-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%)",
+            backgroundSize: "12px 12px",
+            backgroundPosition: "0 0,0 6px,6px -6px,-6px 0",
+          }}
+        >
+          {nilai ? (
+            <img src={nilai} alt="Logo toko" className="w-full h-full object-contain" />
+          ) : (
+            <span className="text-[11px] text-ink-500 text-center px-1 leading-tight">
+              belum ada
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => ref.current?.click()}
+            disabled={unggah}
+            className="min-h-11 px-4 rounded-xl border border-cherry-300 text-sm font-bold text-cherry-700 disabled:opacity-40 active:scale-[0.98]"
+          >
+            {unggah ? "Mengunggah…" : nilai ? "Ganti Logo" : "Unggah Logo"}
+          </button>
+          {nilai && (
+            <button
+              type="button"
+              onClick={() => onGanti(null)}
+              disabled={unggah}
+              className="min-h-11 px-4 rounded-xl border border-cherry-200 text-sm font-bold text-ink-500 disabled:opacity-40"
+            >
+              Pakai logo bawaan
+            </button>
+          )}
+        </div>
+      </div>
+
+      <input
+        ref={ref}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        onChange={pilih}
+        className="hidden"
+      />
+
+      {salah && (
+        <p role="alert" className="text-xs font-bold text-red-700 mt-2 leading-relaxed">
+          {salah}
+        </p>
+      )}
+      <p className="text-xs text-ink-500 mt-2 leading-relaxed">
+        Paling bagus gambar persegi, minimal 256&times;256 px. Maksimal 2 MB.
+      </p>
     </div>
   );
 }

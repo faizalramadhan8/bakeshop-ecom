@@ -36,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/admin", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
   { to: "/admin/pesanan", icon: <ShoppingCart size={18} />, label: "Pesanan", badgeKey: "paid" },
   { to: "/admin/produk", icon: <Package size={18} />, label: "Produk", badgeKey: "lowStock" },
+  { to: "/admin/pergerakan-stok", icon: <ArrowLeftRight size={18} />, label: "Pergerakan Stok" },
   { to: "/admin/kategori", icon: <Tag size={18} />, label: "Kategori" },
   { to: "/admin/voucher", icon: <Ticket size={18} />, label: "Voucher" },
   { to: "/admin/customers", icon: <Users size={18} />, label: "Customer" },

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Save, AlertCircle, Info, Upload, Camera, Image as ImageIcon, X, Loader2, Bell } from "lucide-react";
 import toast from "react-hot-toast";
-import { adminApi, decodeToken, type EcomAdminProduct, type EcomCategoryAdmin } from "@/lib/api";
+import { adminApi, decodeToken, type EcomAdminProduct, type EcomCategoryAdmin, type EcomPriceTier } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -34,6 +34,14 @@ export function AdminProdukEdit() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  // Dipakai setelah stok disesuaikan — angkanya harus datang dari server,
+  // bukan dihitung di sisi depan. Kalau dihitung sendiri, layar bisa
+  // menampilkan angka yang berbeda dari yang benar-benar tersimpan.
+  const muatUlang = () => {
+    if (!id) return;
+    adminApi.getProduct(id).then(setProduct).catch(() => {});
+  };
 
   useEffect(() => {
     const claims = decodeToken();
@@ -399,25 +407,41 @@ export function AdminProdukEdit() {
             </button>
           </section>
 
-          {/* Stok toko dan online digabung 29 Sep 2026 (permintaan Fai +
-              Bu Santi: "stok online dan stok e-commerce jadi 1"). Angkanya
-              read-only di sini — satu-satunya jalur ubah stok adalah menu
+          {/* Angka ini adalah stok RUMAH (`products.stock_home`), bukan rak
+              Bekasi — dua tumpukan fisik yang terpisah sejak migrasi 000075.
+              Read-only di sini; satu-satunya jalur ubah stok adalah menu
               Sesuaikan Stok di POS, yang mewajibkan alasan dan menulis audit
-              trail. BE juga menolak patch stok dari endpoint ini. */}
+              trail. BE juga menolak patch stok dari endpoint ini.
+
+              Penyebutannya sengaja eksplisit. Label lama berbunyi "stok toko
+              dan online satu angka" — kalimat yang benar saat itu, tapi
+              justru kalimat semacam inilah yang dulu bikin arti kolom stok
+              tertukar dan 105 produk menggelembung 914 unit (1 Okt 2026). */}
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
-            <h2 className="text-sm font-black text-ink-900 mb-3">Stok</h2>
+            <h2 className="text-sm font-black text-ink-900 mb-3">Stok di Rumah</h2>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-ink-900 tabular-nums">
                 {product.stock_ecom}
               </span>
               <span className="text-sm text-ink-500">tersedia</span>
             </div>
-            <p className="text-xs text-ink-500 mt-2">
-              Stok toko dan online sekarang satu angka. Setiap penjualan online
-              langsung mengurangi stok di kasir, begitu juga sebaliknya. Untuk
-              mengubahnya, pakai menu <b className="text-ink-900">Stok &rarr; Sesuaikan
-              Stok</b> di aplikasi POS supaya alasannya tercatat.
+            <p className="text-xs text-ink-500 mt-2 leading-relaxed">
+              Rak toko rumah, terpisah dari toko Bekasi. Hanya penjualan online yang
+              mengurangi angka ini.
             </p>
+
+            {/* Penyesuaian stok sengaja DIPISAH dari tombol Simpan di atas.
+                Form yang bisa menimpa stok bersamaan dengan harga adalah
+                persis mekanisme yang bikin insiden Sunbay 26 Jul 2026: nilai
+                stok di form sudah basi, lalu Save menimpa potongan penjualan
+                yang baru terjadi. Di sini stok diset absolut, wajib alasan,
+                dan selalu menulis jejak ke Pergerakan Stok. */}
+            <SesuaikanStok
+              productId={product.id}
+              stokSekarang={product.stock_ecom}
+              onSelesai={muatUlang}
+            />
+
 
             {/* Sprint 3 #16 — Dispatch restock alert kalau produk sudah
                 restock. Muncul cuma kalau stok saat ini > 0. Idempotent
@@ -427,6 +451,17 @@ export function AdminProdukEdit() {
                 <RestockDispatchButton productID={product.id} productName={product.name_id} />
               </div>
             )}
+          </section>
+
+          {/* Harga grosir — inti model bisnis toko rumah ("menyasar
+              pembelian jumlah kartonan"). Sebelum 23 Okt 2026 layar ini cuma
+              ada di POS, dan POS menyaring produk rumah keluar, jadi produk
+              rumah tidak bisa diberi harga kartonan sama sekali. */}
+          <section className="bg-white rounded-2xl border border-cherry-200 p-5">
+            <HargaGrosir
+              productId={product.id}
+              hargaNormal={product.ecom_price ?? product.selling_price}
+            />
           </section>
 
           <section className="bg-white rounded-2xl border border-cherry-200 p-5">
@@ -601,5 +636,392 @@ function RestockDispatchButton({ productID, productName }: { productID: string; 
       <Bell size={12} aria-hidden="true" />
       Kirim Notif Restock ke Subscriber
     </button>
+  );
+}
+
+
+// ─── Sesuaikan Stok ───────────────────────────────────────────────────────
+//
+// Satu-satunya jalur ubah stok toko rumah. Set absolut (bukan selisih),
+// alasan wajib, dan selalu menulis baris ke Pergerakan Stok.
+//
+// Dipisah dari tombol Simpan produk dengan sengaja. Nilai stok di sebuah
+// form sudah basi begitu halaman dimuat — kalau ikut tersimpan bersama
+// harga, penjualan yang terjadi di sela itu tertimpa diam-diam. Itu persis
+// insiden Sunbay 26 Jul 2026.
+const ALASAN_PILIHAN: { v: string; label: string; hint: string }[] = [
+  { v: "opname", label: "Koreksi opname", hint: "Hasil hitung fisik beda dengan sistem" },
+  { v: "restock", label: "Stok masuk", hint: "Barang baru datang dari distributor" },
+  { v: "damaged", label: "Rusak / kedaluwarsa", hint: "Tidak bisa dijual lagi" },
+  { v: "lost", label: "Hilang", hint: "Barang fisik tidak ada" },
+  { v: "repack", label: "Kemasan dipecah", hint: "Kemasan besar jadi kemasan kecil" },
+  { v: "sample", label: "Sample / promo", hint: "Diberikan ke customer" },
+  { v: "other", label: "Lainnya", hint: "Isi catatan untuk detail" },
+];
+
+function SesuaikanStok({
+  productId, stokSekarang, onSelesai,
+}: {
+  productId: string;
+  stokSekarang: number;
+  onSelesai: () => void;
+}) {
+  const [buka, setBuka] = useState(false);
+  const [nilai, setNilai] = useState(String(stokSekarang));
+  const [alasan, setAlasan] = useState("opname");
+  const [catatan, setCatatan] = useState("");
+  const [simpan, setSimpan] = useState(false);
+  const [salah, setSalah] = useState<string | null>(null);
+
+  const angka = parseInt(nilai, 10);
+  const selisih = Number.isFinite(angka) ? angka - stokSekarang : 0;
+  const butuhCatatan = alasan === "other" && !catatan.trim();
+
+  const kirim = async () => {
+    if (!Number.isFinite(angka) || angka < 0) { setSalah("Jumlah stok tidak valid."); return; }
+    if (selisih === 0) { setSalah("Jumlahnya sama dengan sekarang — tidak ada yang disesuaikan."); return; }
+    if (butuhCatatan) { setSalah("Alasan \"Lainnya\" wajib diisi catatannya."); return; }
+    setSalah(null);
+    setSimpan(true);
+    try {
+      await adminApi.adjustStock(productId, { new_stock: angka, reason: alasan, note: catatan.trim() });
+      toast.success("Stok disesuaikan");
+      setBuka(false);
+      setCatatan("");
+      onSelesai();
+    } catch (e) {
+      setSalah(e instanceof Error ? e.message : "Gagal menyesuaikan stok.");
+    } finally {
+      setSimpan(false);
+    }
+  };
+
+  if (!buka) {
+    return (
+      <button
+        onClick={() => { setBuka(true); setNilai(String(stokSekarang)); setSalah(null); }}
+        className="mt-3 inline-flex items-center gap-1.5 min-h-11 px-4 rounded-xl border border-cherry-300 text-sm font-bold text-cherry-700 active:scale-[0.98]"
+      >
+        Sesuaikan Stok
+      </button>
+    );
+  }
+
+  const inp = "w-full px-3 py-2.5 text-sm rounded-xl border border-cherry-200 bg-white text-ink-900";
+
+  return (
+    <div className="mt-3 rounded-xl border border-cherry-200 bg-cherry-50/40 p-4 space-y-3">
+      <div>
+        <label className="text-xs font-bold text-ink-700 block mb-1.5">Stok setelah disesuaikan</label>
+        <input type="number" min="0" value={nilai} onChange={(e) => setNilai(e.target.value)} className={inp} />
+        {Number.isFinite(angka) && selisih !== 0 && (
+          <p className={`text-xs mt-1 font-bold ${selisih > 0 ? "text-cherry-600" : "text-red-600"}`}>
+            {selisih > 0 ? `+${selisih}` : selisih} dari sekarang ({stokSekarang})
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-ink-700 block mb-1.5">Alasan</label>
+        <select value={alasan} onChange={(e) => setAlasan(e.target.value)} className={inp}>
+          {ALASAN_PILIHAN.map((a) => <option key={a.v} value={a.v}>{a.label}</option>)}
+        </select>
+        <p className="text-xs text-ink-500 mt-1">
+          {ALASAN_PILIHAN.find((a) => a.v === alasan)?.hint}
+        </p>
+      </div>
+
+      <div>
+        <label className="text-xs font-bold text-ink-700 block mb-1.5">
+          Catatan {alasan === "other" && <span className="text-red-600">*</span>}
+        </label>
+        <input value={catatan} onChange={(e) => setCatatan(e.target.value)} className={inp}
+          placeholder="Opsional — mis. nomor nota atau nama yang menghitung" />
+      </div>
+
+      {salah && (
+        <p role="alert" className="text-xs font-bold text-red-700 leading-relaxed">{salah}</p>
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={() => { setBuka(false); setSalah(null); }} disabled={simpan}
+          className="flex-1 min-h-11 rounded-xl border border-cherry-200 text-sm font-bold text-ink-700 disabled:opacity-40">
+          Batal
+        </button>
+        <button onClick={kirim} disabled={simpan}
+          className="flex-1 min-h-11 rounded-xl text-white text-sm font-black bg-gradient-to-r from-cherry-500 to-cherry-600 disabled:opacity-40 active:scale-[0.98]">
+          {simpan ? "Menyimpan…" : "Simpan"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Harga grosir (kartonan) ──────────────────────────────────────────────
+//
+// Aturannya mode PAKET, sama persis dengan kasir dan dengan yang ditagih
+// checkout: tier berlaku HANYA dalam kelipatan jumlah minimumnya, sisanya
+// harga normal. "Beli 2 = 33rb" berarti 2 → 33rb, 3 → 33rb + 1 satuan,
+// 4 → 66rb. Bukan "sekali lewat ambang semua unit murah" — aturan itu
+// ditolak Bu Santi 21 Jun 2026 karena terlalu murah hati.
+//
+// Admin mengetik TOTAL PAKET ("beli 3 = Rp 149.000"), bukan harga satuan.
+// Itu cara Bu Santi memasangnya dan cara customer membacanya; pembagian ke
+// harga per satuan dilakukan saat menyimpan, karena begitulah backend
+// menyimpannya.
+//
+// Target selalu "semua customer" — toko rumah tidak punya konsep member POS,
+// dan backend memaksanya juga. Tidak ditampilkan sebagai pilihan supaya
+// tidak ada yang perlu diputuskan tanpa guna.
+
+const DURASI = [
+  { v: 0, label: "Tidak terbatas" },
+  { v: 1, label: "1 hari" },
+  { v: 3, label: "3 hari" },
+  { v: 6, label: "6 hari" },
+  { v: 12, label: "12 hari" },
+  { v: 30, label: "30 hari" },
+];
+
+function rp(n: number) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+}
+
+function sisaHari(iso?: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.ceil((d.getTime() - Date.now()) / 86400000);
+}
+
+function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNormal: number }) {
+  const [tiers, setTiers] = useState<EcomPriceTier[]>([]);
+  const [muat, setMuat] = useState(true);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [buka, setBuka] = useState(false);
+  const [qty, setQty] = useState("");
+  const [total, setTotal] = useState("");
+  const [durasi, setDurasi] = useState(0);
+  const [catatan, setCatatan] = useState("");
+  const [simpan, setSimpan] = useState(false);
+  const [salah, setSalah] = useState<string | null>(null);
+  const [hapusId, setHapusId] = useState<string | null>(null);
+
+  const ambil = () => {
+    setMuat(true);
+    adminApi.listTiers(productId)
+      .then((d) => setTiers(d ?? []))
+      .catch(() => setTiers([]))
+      .finally(() => setMuat(false));
+  };
+  useEffect(ambil, [productId]);
+
+  const tutup = () => {
+    setBuka(false); setEditId(null); setQty(""); setTotal("");
+    setDurasi(0); setCatatan(""); setSalah(null);
+  };
+
+  const mulaiEdit = (t: EcomPriceTier) => {
+    setEditId(t.id);
+    setQty(String(t.min_qty));
+    // Dikalikan balik ke total paket — tersimpan per satuan, diketik per paket.
+    setTotal(String(Math.round(t.price * t.min_qty)));
+    setCatatan(t.note || "");
+    // Durasi sengaja tidak dimuat ulang: backend menyimpan tanggal kedaluwarsa,
+    // bukan durasinya. Dibiarkan "Tidak terbatas" supaya admin memilih ulang
+    // kalau memang mau diperpanjang — menebak durasi dari tanggal akan salah.
+    setDurasi(0);
+    setSalah(null);
+    setBuka(true);
+  };
+
+  const n = (v: string) => (v.trim() === "" ? NaN : Number(v));
+  const q = n(qty), tot = n(total);
+  const perSatuan = Number.isFinite(q) && Number.isFinite(tot) && q > 0 ? tot / q : 0;
+  const hemat = Number.isFinite(q) && q > 0 ? hargaNormal * q - tot : 0;
+
+  const kirim = async () => {
+    if (!Number.isFinite(q) || q < 2) { setSalah("Jumlah minimal harus 2 atau lebih."); return; }
+    if (!Number.isFinite(tot) || tot <= 0) { setSalah("Harga paket belum diisi."); return; }
+    if (perSatuan >= hargaNormal) {
+      // Dicegah di sini, bukan dibiarkan tersimpan: backend juga mengabaikan
+      // tier yang lebih mahal dari harga normal, jadi kalau diloloskan
+      // tiernya akan tampil di daftar tapi tidak pernah berlaku.
+      setSalah(`Harga per satuan (${rp(Math.round(perSatuan))}) tidak lebih murah dari harga normal (${rp(hargaNormal)}). Grosir seharusnya lebih murah.`);
+      return;
+    }
+    setSalah(null);
+    setSimpan(true);
+    try {
+      const payload = {
+        min_qty: q,
+        price: tot / q,
+        target_type: "all_customers" as const,
+        note: catatan.trim(),
+        duration_days: durasi || undefined,
+      };
+      if (editId) await adminApi.updateTier(productId, editId, payload);
+      else await adminApi.createTier(productId, payload);
+      toast.success(editId ? "Harga grosir diperbarui" : "Harga grosir ditambahkan");
+      tutup();
+      ambil();
+    } catch (e) {
+      setSalah(e instanceof Error ? e.message : "Gagal menyimpan harga grosir.");
+    } finally {
+      setSimpan(false);
+    }
+  };
+
+  const hapus = async (id: string) => {
+    try {
+      await adminApi.deleteTier(productId, id);
+      toast.success("Harga grosir dihapus");
+      setHapusId(null);
+      ambil();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus.");
+    }
+  };
+
+  const inp = "w-full px-3 py-2.5 text-sm rounded-xl border border-cherry-200 bg-white text-ink-900";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <h2 className="text-sm font-black text-ink-900">Harga Grosir</h2>
+        {!buka && (
+          <button onClick={() => { tutup(); setBuka(true); }}
+            className="min-h-11 px-4 rounded-xl border border-cherry-300 text-sm font-bold text-cherry-700 active:scale-[0.98]">
+            + Tambah
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-ink-500 leading-relaxed mb-3">
+        Berlaku per kelipatan. Contoh &quot;beli 3 = {rp(149000)}&quot;: beli 3 dapat harga paket,
+        beli 4 jadi 1 paket + 1 satuan harga normal.
+      </p>
+
+      {muat ? (
+        <p className="text-sm text-ink-500">Memuat…</p>
+      ) : tiers.length === 0 && !buka ? (
+        <p className="text-sm text-ink-500 leading-relaxed">
+          Belum ada harga grosir. Tanpa ini customer selalu membayar harga satuan,
+          berapa pun banyaknya yang dibeli.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {tiers.map((t) => {
+            const sisa = sisaHari(t.expires_at);
+            const kadaluarsa = sisa !== null && sisa <= 0;
+            return (
+              <div key={t.id} className="rounded-xl border border-cherry-100 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-ink-900">
+                      Beli {t.min_qty} = {rp(Math.round(t.price * t.min_qty))}
+                      <span className="text-ink-500 font-normal text-xs"> ({rp(Math.round(t.price))}/satuan)</span>
+                    </p>
+                    {t.note && <p className="text-xs text-ink-500 mt-0.5">{t.note}</p>}
+                    {sisa !== null && (
+                      <p className={`text-xs font-bold mt-1 ${kadaluarsa ? "text-red-600" : "text-amber-700"}`}>
+                        {kadaluarsa ? "Sudah kedaluwarsa — tidak berlaku lagi" : `Sisa ${sisa} hari`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => mulaiEdit(t)}
+                      className="min-h-11 px-3 rounded-xl border border-cherry-200 text-xs font-bold text-ink-700">
+                      Ubah
+                    </button>
+                    <button onClick={() => setHapusId(t.id)}
+                      className="min-h-11 px-3 rounded-xl border border-red-200 text-xs font-bold text-red-700">
+                      Hapus
+                    </button>
+                  </div>
+                </div>
+                {hapusId === t.id && (
+                  <div className="mt-3 pt-3 border-t border-cherry-100">
+                    <p className="text-xs text-ink-700 mb-2 leading-relaxed">
+                      Hapus harga grosir ini? Customer kembali membayar harga satuan.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setHapusId(null)}
+                        className="flex-1 min-h-11 rounded-xl border border-cherry-200 text-sm font-bold text-ink-700">
+                        Batal
+                      </button>
+                      <button onClick={() => hapus(t.id)}
+                        className="flex-1 min-h-11 rounded-xl text-white text-sm font-bold bg-red-600">
+                        Ya, Hapus
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {buka && (
+        <div className="mt-3 rounded-xl border border-cherry-200 bg-cherry-50/40 p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-ink-700 block mb-1.5">Beli berapa</label>
+              <input type="number" min="2" value={qty} onChange={(e) => setQty(e.target.value)}
+                className={inp} placeholder="mis. 12" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-ink-700 block mb-1.5">Total harga paket</label>
+              <input type="number" min="0" value={total} onChange={(e) => setTotal(e.target.value)}
+                className={inp} placeholder="mis. 149000" />
+            </div>
+          </div>
+
+          {/* Hitungan ditampilkan sebelum disimpan — angka per satuan yang
+              tersimpan di belakang layar, dan hematnya yang dilihat customer. */}
+          {perSatuan > 0 && (
+            <p className="text-xs text-ink-700 leading-relaxed">
+              Jadi <b>{rp(Math.round(perSatuan))}</b> per satuan
+              {hargaNormal > 0 && hemat > 0 && (
+                <> — customer hemat <b>{rp(Math.round(hemat))}</b> dibanding harga normal</>
+              )}
+            </p>
+          )}
+
+          <div>
+            <label className="text-xs font-bold text-ink-700 block mb-1.5">Berlaku sampai</label>
+            <select value={durasi} onChange={(e) => setDurasi(Number(e.target.value))} className={inp}>
+              {DURASI.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}
+            </select>
+            {editId && (
+              <p className="text-xs text-ink-500 mt-1 leading-relaxed">
+                Pilih ulang kalau mau diperpanjang. Dibiarkan &quot;Tidak terbatas&quot; akan
+                menghapus batas waktunya.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-ink-700 block mb-1.5">Catatan</label>
+            <input value={catatan} onChange={(e) => setCatatan(e.target.value)} className={inp}
+              placeholder="Opsional — mis. harga karton" />
+          </div>
+
+          {salah && <p role="alert" className="text-xs font-bold text-red-700 leading-relaxed">{salah}</p>}
+
+          <div className="flex gap-2">
+            <button onClick={tutup} disabled={simpan}
+              className="flex-1 min-h-11 rounded-xl border border-cherry-200 text-sm font-bold text-ink-700 disabled:opacity-40">
+              Batal
+            </button>
+            <button onClick={kirim} disabled={simpan}
+              className="flex-1 min-h-11 rounded-xl text-white text-sm font-black bg-gradient-to-r from-cherry-500 to-cherry-600 disabled:opacity-40 active:scale-[0.98]">
+              {simpan ? "Menyimpan…" : editId ? "Simpan Perubahan" : "Tambah"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -92,6 +92,56 @@ export const adminApi = {
     );
   },
 
+  // ─── Katalog produk toko rumah (21 Okt 2026) ───────────────────────────
+  // Panel ini punya katalognya sendiri: produk yang dibuat di sini tidak
+  // pernah terlihat di POS, dan produk Bekasi tidak pernah terlihat di sini.
+  // Backend menolak id produk Bekasi dengan "tidak ditemukan".
+  createProduct: (data: Record<string, unknown>) =>
+    request<EcomAdminProduct>("POST", "/ecom/admin/products", data),
+
+  updateProduct: (id: string, data: Record<string, unknown>) =>
+    request<EcomAdminProduct>("PUT", `/ecom/admin/products/${id}`, data),
+
+  deleteProduct: (id: string) =>
+    request<null>("DELETE", `/ecom/admin/products/${id}`),
+
+  /**
+   * Satu-satunya jalur ubah stok. Wajib alasan dan menulis jejak ke
+   * Pergerakan Stok — sengaja dipisah dari updateProduct supaya tidak ada
+   * form yang bisa menimpa stok diam-diam.
+   */
+  adjustStock: (id: string, data: { new_stock: number; reason: string; note?: string }) =>
+    request<unknown>("POST", `/ecom/admin/products/${id}/adjust-stock`, data),
+
+  // ─── Harga grosir (kartonan) produk rumah ──────────────────────────────
+  // Backend memaksa target 'all_customers': toko rumah tidak punya konsep
+  // member POS, dan storefront memang hanya membaca tier itu.
+  listTiers: (productId: string) =>
+    request<EcomPriceTier[]>("GET", `/ecom/admin/products/${productId}/tiers`),
+
+  createTier: (productId: string, data: TierPayload) =>
+    request<EcomPriceTier>("POST", `/ecom/admin/products/${productId}/tiers`, data),
+
+  updateTier: (productId: string, tierId: string, data: TierPayload) =>
+    request<EcomPriceTier>("PUT", `/ecom/admin/products/${productId}/tiers/${tierId}`, data),
+
+  deleteTier: (productId: string, tierId: string) =>
+    request<null>("DELETE", `/ecom/admin/products/${productId}/tiers/${tierId}`),
+
+  /** Kategori + pemasok POS — dipakai bersama kedua tempat. */
+  catalogRefs: () =>
+    request<{ categories: { id: string; name: string }[]; suppliers: { id: string; name: string }[] }>(
+      "GET", "/ecom/admin/catalog-refs"),
+
+  listStockMovements: (params?: { type?: string; page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.type) q.set("type", params.type);
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<EcomStockMovement[]>("GET", `/ecom/admin/stock-movements${qs ? `?${qs}` : ""}`);
+  },
+
   getProduct: (id: string) =>
     request<EcomAdminProduct>("GET", `/ecom/admin/products/${id}`, undefined, "admin"),
 
@@ -240,7 +290,7 @@ export const adminApi = {
   // yang JSON-only). Endpoint /upload berlaku umum, dipakai POS + ecom.
   uploadImage: async (
     file: File,
-    type: "products" | "payment-proof" = "products",
+    type: "products" | "payment-proof" | "store-logo" = "products",
   ): Promise<{ url: string; filename: string }> => {
     const tk = getToken();
     const fd = new FormData();
@@ -284,11 +334,48 @@ export const accountApi = {
     request<unknown>("POST", "/ecom/reviews", data, "customer"),
 };
 
+/**
+ * Harga grosir satu tingkat. `price` disimpan PER SATUAN — admin mengetik
+ * total paket ("beli 3 = Rp 149.000"), layarnya yang membagi saat menyimpan.
+ */
+export interface EcomPriceTier {
+  id: string;
+  min_qty: number;
+  price: number;
+  target_type: string;
+  note?: string;
+  expires_at?: string | null;
+}
+
+export interface TierPayload {
+  min_qty: number;
+  price: number;
+  target_type: "all_customers";
+  note?: string;
+  duration_days?: number;
+}
+
+export interface EcomStockMovement {
+  id: string;
+  product_id: string;
+  product?: { name_id?: string; name?: string; sku?: string; unit?: string };
+  type: "in" | "out";
+  quantity: number;
+  reason?: string;
+  note?: string;
+  created_at: string;
+}
+
 export interface EcomAdminProduct {
   id: string;
   name: string;
   name_id: string;
   sku: string;
+  /**
+   * Sisa dari masa katalog masih digabung. Sejak migration 000075 katalog
+   * rumah terpisah, jadi untuk produk di panel ini `stock_pos` dan
+   * `stock_ecom` menunjuk angka yang sama. Pakai `stock_ecom`.
+   */
   stock_pos: number;
   selling_price: number;
   member_price?: number | null;
@@ -893,6 +980,8 @@ export interface EcomSettings {
   announcement_bar_cta_label?: string;
   announcement_bar_cta_url?: string;
   store_name: string;
+  /** URL logo toko. Kosong = pakai logo bawaan yang digambar di kode. */
+  store_logo?: string | null;
   store_email?: string;
   store_pickup_address?: string;
   store_pickup_phone?: string;

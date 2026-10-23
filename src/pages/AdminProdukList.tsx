@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Search, Package, Eye, EyeOff, AlertCircle, Loader2,
+  Plus, Search, Package, Eye, EyeOff, AlertCircle, Loader2,
   X, CheckSquare, Wallet, RefreshCw,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -87,8 +87,16 @@ export function AdminProdukList() {
 
   return (
     <AdminShell
-      title="Produk Online"
-      subtitle="Publish produk ke storefront + manage stok dan harga online"
+      title="Produk Toko Rumah"
+      subtitle="Katalog sendiri — tidak muncul di kasir toko Bekasi"
+      headerRight={
+        <Link
+          to="/admin/produk/baru"
+          className="inline-flex items-center gap-1.5 min-h-11 px-4 rounded-xl text-white text-sm font-black bg-gradient-to-r from-cherry-500 to-cherry-600 active:scale-[0.98]"
+        >
+          <Plus size={15} aria-hidden="true" /> Tambah Produk
+        </Link>
+      }
     >
       <div>
         <div className="relative mb-3">
