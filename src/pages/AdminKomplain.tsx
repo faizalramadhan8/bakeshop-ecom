@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
 import { exportComplaintsXlsx } from "@/lib/export";
+import { PilihTempat, type Tempat } from "@/components/PilihTempat";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -41,27 +42,33 @@ export function AdminKomplain() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>("open");
   const [replying, setReplying] = useState<ComplaintAdmin | null>(null);
+  // Komplain tidak punya kolom tempat sendiri — tempatnya menempel pada
+  // pesanannya, dan backend yang menelusurinya.
+  const [tempat, setTempat] = useState<Tempat>("");
 
   const load = () => {
     setLoading(true);
-    adminApi.listComplaints(filter)
+    adminApi.listComplaints(filter, tempat || undefined)
       .then((rows) => setItems(rows || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   };
-  useEffect(load, [filter]);
+  useEffect(load, [filter, tempat]);
 
   // Count per status untuk badge di filter chip
   const [counts, setCounts] = useState<Record<string, number>>({});
   useEffect(() => {
-    adminApi.listComplaints("all")
+    // Hitungan badge ikut penyaring tempat, supaya angkanya sejalan dengan
+    // daftar di bawahnya — angka yang tidak cocok membuat orang mengira ada
+    // komplain yang hilang.
+    adminApi.listComplaints("all", tempat || undefined)
       .then((rows) => {
         const c: Record<string, number> = { all: rows.length };
         for (const r of rows) c[r.status] = (c[r.status] || 0) + 1;
         setCounts(c);
       })
       .catch(() => {});
-  }, [items.length]);
+  }, [items.length, tempat]);
 
   const filters: { key: StatusFilter; label: string }[] = [
     { key: "open", label: "Baru" },
@@ -121,6 +128,10 @@ export function AdminKomplain() {
         </button>
       }
     >
+      <div className="mb-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+        <PilihTempat value={tempat} onChange={setTempat} />
+      </div>
+
       {/* Filter chips */}
       <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1">
         {filters.map((f) => {

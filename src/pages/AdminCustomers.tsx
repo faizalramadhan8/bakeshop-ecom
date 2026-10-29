@@ -18,6 +18,7 @@ import { AdminShell } from "@/components/AdminShell";
 import { SkeletonList } from "@/components/Skeleton";
 import { exportCustomersXlsx } from "@/lib/export";
 import { useUrlQueryState } from "@/lib/useUrlQueryState";
+import { PilihTempat, type Tempat } from "@/components/PilihTempat";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -41,6 +42,9 @@ export function AdminCustomers() {
   // Sprint 6 Chunk 12 — filter persist via URL query.
   const [search, setSearch] = useUrlQueryState("search", "");
   const [statusFilterRaw, setStatusFilterRaw] = useUrlQueryState("status", "all");
+  // Menyaring AGREGAT belanjanya, bukan daftar customernya — orang yang sama
+  // bisa belanja di dua toko.
+  const [tempat, setTempat] = useUrlQueryState("location", "");
   const statusFilter = statusFilterRaw as "all" | "active" | "banned" | "no_order";
   const setStatusFilter = (v: "all" | "active" | "banned" | "no_order") => setStatusFilterRaw(v);
   const [total, setTotal] = useState(0);
@@ -48,7 +52,7 @@ export function AdminCustomers() {
 
   const load = () => {
     setLoading(true);
-    adminApi.listCustomers({ search: search.trim() || undefined, limit: 100 })
+    adminApi.listCustomers({ search: search.trim() || undefined, location: tempat || undefined, limit: 100 })
       .then((res) => {
         setItems(res.items || []);
         setTotal(res.total || 0);
@@ -62,7 +66,7 @@ export function AdminCustomers() {
     const t = setTimeout(load, search ? 400 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, tempat]);
 
   const filtered = useMemo(() => {
     return items.filter((c) => {
@@ -95,6 +99,14 @@ export function AdminCustomers() {
         </button>
       }
     >
+      {/* Pemilih tempat — menyaring angka belanjanya (total, jumlah order),
+          bukan daftar customernya: orang yang sama bisa belanja di dua toko,
+          dan menghilangkannya dari daftar membuat riwayatnya seolah tidak
+          pernah ada. */}
+      <div className="mb-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+        <PilihTempat value={tempat as Tempat} onChange={(v) => setTempat(v)} />
+      </div>
+
       {/* Search */}
       <div className="relative mb-3">
         <Search

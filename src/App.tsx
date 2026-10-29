@@ -5,6 +5,7 @@ import { ShopLayout } from "@/components/ShopLayout";
 import { Home } from "@/pages/Home";
 import { Kategori } from "@/pages/Kategori";
 import { Produk } from "@/pages/Produk";
+import { Toko } from "@/pages/Toko";
 import { Keranjang } from "@/pages/Keranjang";
 import { Akun } from "@/pages/Akun";
 import { Alamat } from "@/pages/Alamat";
@@ -57,6 +58,9 @@ export default function App() {
         <Route path="/kategori" element={<Kategori />} />
         <Route path="/kategori/:slug" element={<Kategori />} />
         <Route path="/produk/:id" element={<Produk />} />
+        {/* Halaman satu toko — semua barang yang dia jual + alamat jemputnya.
+            Dibuka dari baris "Dikirim dari …" di halaman produk. */}
+        <Route path="/toko/:location" element={<Toko />} />
         <Route path="/keranjang" element={<Keranjang />} />
         <Route path="/akun" element={<Akun />} />
         <Route path="/akun/alamat" element={<Alamat />} />

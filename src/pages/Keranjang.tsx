@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ShoppingBag, Package, Minus, Plus, Trash2, AlertCircle, Check,
+  Store,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatRp } from "@/lib/api";
@@ -92,6 +93,22 @@ export function Keranjang() {
     () => (cart ? cart.items.filter((i) => selectedIds.has(i.id) && !i.unavailable) : []),
     [cart, selectedIds]
   );
+
+  // Barang diurutkan per toko supaya kepala tokonya bisa disisipkan di
+  // pergantian kelompok. Keranjang yang mencampur dua toko secara acak
+  // menyembunyikan fakta bahwa pesanannya akan dikirim dalam dua paket
+  // dengan dua ongkir — dan itu baru ketahuan di halaman checkout.
+  const itemsOrdered = useMemo(() => {
+    if (!cart) return [];
+    const urut = ["home", "store"];
+    return [...cart.items].sort(
+      (a, b) => urut.indexOf(a.location || "home") - urut.indexOf(b.location || "home"));
+  }, [cart]);
+
+  const multiToko = useMemo(() => {
+    const set = new Set((cart?.items ?? []).map((i) => i.location || "home"));
+    return set.size > 1;
+  }, [cart]);
 
   const allSelected = availableItems.length > 0 && selectedItems.length === availableItems.length;
   const selectedSubtotal = selectedItems.reduce((sum, it) => sum + it.subtotal, 0);
@@ -228,12 +245,38 @@ export function Keranjang() {
               </div>
             )}
 
-            {cart.items.map((it) => {
+            {itemsOrdered.map((it, idx) => {
               const busy = busyId === it.id;
               const isSelected = selectedIds.has(it.id);
+              const prev = itemsOrdered[idx - 1];
+              const kepalaToko =
+                multiToko && (!prev || (prev.location || "home") !== (it.location || "home"));
+              const grup = cart.groups?.find((g) => g.location === it.location);
+              const kurangMin =
+                grup && grup.min_order_amount > 0 && grup.subtotal < grup.min_order_amount
+                  ? grup.min_order_amount - grup.subtotal
+                  : 0;
               return (
+                <Fragment key={it.id}>
+                {kepalaToko && (
+                  <div className="flex items-center justify-between gap-2 pt-2 first:pt-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Store size={14} className="text-cherry-500 shrink-0" aria-hidden="true" />
+                      <p className="text-sm font-black text-ink-900 truncate">
+                        {it.store_name || "Toko"}
+                      </p>
+                    </div>
+                    {/* Dikirim terpisah — disebut di sini, bukan cuma di
+                        checkout, supaya ongkir kedua tidak jadi kejutan. */}
+                    <span className="text-[11px] text-ink-500 shrink-0">Dikirim terpisah</span>
+                  </div>
+                )}
+                {kepalaToko && kurangMin > 0 && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    Kurang {formatRp(kurangMin)} lagi untuk memenuhi minimal belanja di toko ini.
+                  </p>
+                )}
                 <div
-                  key={it.id}
                   className={`relative flex gap-3 p-3 rounded-2xl border ${
                     it.unavailable
                       ? "border-ink-200 bg-ink-50/50"
@@ -343,6 +386,7 @@ export function Keranjang() {
                     </div>
                   </div>
                 </div>
+                </Fragment>
               );
             })}
           </div>

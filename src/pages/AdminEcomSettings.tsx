@@ -13,6 +13,7 @@ import {
   type EcomSettings, type EcomAdminProduct, type EcomCategoryAdmin,
 } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
+import { PALET } from "@/lib/brandTheme";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -28,17 +29,26 @@ export function AdminEcomSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Toko yang sedang diatur. Tiap tempat punya nama, logo, warna, nomor WA,
+  // dan ALAMAT JEMPUT sendiri — satu alamat untuk dua toko berarti ongkir
+  // salah satunya dihitung dari titik yang keliru, diam-diam.
+  const [tempat, setTempat] = useState<"home" | "store">("home");
 
   // Sprint 5 Chunk 7 — lookup untuk Homepage CMS section (pinned products + featured cats).
   const [products, setProducts] = useState<EcomAdminProduct[]>([]);
   const [categories, setCategories] = useState<EcomCategoryAdmin[]>([]);
 
   useEffect(() => {
-    adminApi.getSettings()
+    setLoading(true);
+    setDirty(false);
+    adminApi.getSettings(tempat)
       .then((s) => setData(s))
       .catch((err) => toast.error(err instanceof Error ? err.message : "Gagal load"))
       .finally(() => setLoading(false));
-    // Parallel fetch untuk lookup Homepage section.
+  }, [tempat]);
+
+  useEffect(() => {
+    // Lookup untuk Homepage section — tidak bergantung tempat.
     adminApi.listProducts({ limit: 200 })
       .then((res) => setProducts(res.items || []))
       .catch(() => {}); // silent — Homepage CMS tetap works dengan input teks manual
@@ -79,7 +89,7 @@ export function AdminEcomSettings() {
     }
     setSaving(true);
     try {
-      const resp = await adminApi.updateSettings(data);
+      const resp = await adminApi.updateSettings(data, tempat);
       setData(resp);
       setDirty(false);
       toast.success("Pengaturan tersimpan");
@@ -117,6 +127,75 @@ export function AdminEcomSettings() {
       }
     >
       <div className="max-w-3xl flex flex-col gap-4 pb-8">
+        {/* Pemilih toko — selalu tampil. Tanpa penandanya, mengubah nama toko
+            di layar yang sama terlihat seperti mengubah satu-satunya toko,
+            padahal yang berubah cuma salah satu. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <PilihTempatToko value={tempat} onChange={setTempat} />
+          <span className="text-xs text-ink-500">
+            Pengaturan di bawah berlaku untuk toko yang dipilih saja.
+          </span>
+        </div>
+
+        {/* Alamat jemput kosong = ongkir dihitung dari alamat cadangan di
+            server, yang isinya alamat toko satunya. Salah tanpa pesan salah —
+            jadi diperingatkan di sini, bukan dibiarkan ketahuan dari tarif
+            yang ganjil. */}
+        {!(data.store_pickup_address || "").trim() && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-900">
+            <AlertCircle size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
+            <span>
+              <b>Alamat jemput toko ini belum diisi.</b> Ongkir akan dihitung dari
+              alamat cadangan di server — bisa jadi alamat toko satunya, dan
+              tarifnya salah tanpa pesan error. Isi di bagian Info Toko di bawah.
+            </span>
+          </div>
+        )}
+
+        {/* Saklar tayang. Ditaruh di atas semuanya karena ini yang paling
+            menentukan: selama mati, produk toko ini tidak muncul di mana pun
+            di storefront — tidak di beranda, tidak di pencarian, tidak lewat
+            tautan langsung, dan tidak bisa masuk keranjang. */}
+        <div className={`rounded-xl border p-3 flex items-start gap-3 ${
+          data.storefront_enabled ? "border-emerald-200 bg-emerald-50" : "border-cherry-200 bg-white"
+        }`}>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-ink-900">
+              {data.storefront_enabled ? "Tayang di storefront" : "Belum tayang di storefront"}
+            </p>
+            <p className="text-xs text-ink-500 mt-0.5 leading-relaxed">
+              {data.storefront_enabled
+                ? "Produk toko ini muncul di beranda dan bisa dibeli customer."
+                : "Produk toko ini tidak muncul di storefront sama sekali. Nyalakan setelah alamat jemputnya terisi — ongkir dihitung dari sana."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!data.storefront_enabled}
+            onClick={() => {
+              const nyala = !data.storefront_enabled;
+              // Menyalakan tanpa alamat jemput = ongkir dihitung dari alamat
+              // toko satunya, tanpa pesan salah. Ditolak di sini, bukan
+              // dibiarkan ketahuan dari tarif yang ganjil berminggu-minggu.
+              if (nyala && !(data.store_pickup_address || "").trim()) {
+                toast.error("Isi Alamat Pickup dulu — ongkir dihitung dari sana.");
+                return;
+              }
+              patch("storefront_enabled", nyala);
+            }}
+            className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${
+              data.storefront_enabled ? "bg-emerald-500" : "bg-ink-200"
+            }`}
+          >
+            <span
+              className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${
+                data.storefront_enabled ? "left-6" : "left-1"
+              }`}
+            />
+          </button>
+        </div>
+
         {dirty && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-xs text-amber-800">
             <AlertCircle size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
@@ -141,6 +220,41 @@ export function AdminEcomSettings() {
               nilai={data.store_logo || null}
               onGanti={(url) => patch("store_logo", url)}
             />
+          </Field>
+          {tempat === "home" && (
+            <>
+          {/* Warna merek. Pilihan terbatas, bukan pemilih warna bebas: tiap
+              palet butuh dua belas nada yang serasi, dan satu warna bebas
+              akan menghasilkan kombinasi yang kontrasnya gagal dan
+              tulisannya tidak terbaca. */}
+          <Field label="Warna Toko" hint="Mengubah seluruh tampilan storefront. Berlaku untuk semua pengunjung.">
+            <div className="flex flex-wrap gap-2">
+              {PALET.map((p) => {
+                const dipilih = (data.brand_color || "") === p.v;
+                return (
+                  <button
+                    key={p.v || "bawaan"}
+                    type="button"
+                    onClick={() => patch("brand_color", p.v)}
+                    aria-pressed={dipilih}
+                    className={`inline-flex items-center gap-2 min-h-11 px-4 rounded-xl border text-sm font-bold transition-colors ${
+                      dipilih ? "border-ink-900 text-ink-900" : "border-cherry-200 text-ink-500"
+                    }`}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full shrink-0 border border-black/10"
+                      style={{ background: p.contoh }}
+                      aria-hidden="true"
+                    />
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-ink-500 mt-2 leading-relaxed">
+              Warnanya baru berubah setelah ditekan <b>Simpan</b>. Pengunjung yang
+              sedang membuka toko melihatnya paling lama lima menit kemudian.
+            </p>
           </Field>
           <Field label="Email Toko" hint="Untuk reply-to email order confirmation.">
             <input
@@ -195,6 +309,8 @@ export function AdminEcomSettings() {
               </Field>
             </div>
           </div>
+            </>
+          )}
         </Section>
 
         {/* Section: Checkout Rules */}
@@ -213,6 +329,15 @@ export function AdminEcomSettings() {
         </Section>
 
         {/* Section: WhatsApp Contact */}
+        {/* Bagian di bawah berlaku untuk SELURUH storefront, bukan per toko:
+            nomor WA mengambang, banner, tampilan beranda, dan mode pembayaran
+            cuma ada satu untuk situs ini — dan rekening penampungnya pun satu
+            (keputusan 30 Okt 2026). Disembunyikan saat mengatur Toko Bekasi,
+            bukan ditampilkan sebagai isian yang tersimpan tapi tidak pernah
+            dibaca; isian semacam itu lebih berbahaya daripada fitur yang
+            belum ada, karena terlihat sudah beres. */}
+        {tempat === "home" ? (
+          <>
         <Section icon={<MessageCircle size={16} />} title="Kontak WhatsApp" desc="Nomor untuk floating button WA di storefront.">
           <Field label="Nomor WhatsApp" hint="Format Indonesia (08xxx atau 628xxx). Diconvert otomatis ke wa.me link.">
             <input
@@ -399,6 +524,18 @@ export function AdminEcomSettings() {
         </Section>
 
         {/* Section: Notification */}
+          </>
+        ) : (
+          <div className="bg-cherry-50/60 border border-cherry-100 rounded-xl p-3 text-xs text-ink-700 flex items-start gap-2">
+            <Info size={12} className="shrink-0 mt-0.5 text-cherry-500" aria-hidden="true" />
+            <div>
+              Nomor WA, banner pengumuman, tampilan beranda, dan metode
+              pembayaran berlaku untuk <b>seluruh storefront</b> — satu untuk
+              dua toko. Aturnya di tab <b>Online Rumah</b>.
+            </div>
+          </div>
+        )}
+
         <Section icon={<Mail size={16} />} title="Notifikasi" desc="Toggle email + push saat status order berubah.">
           <ToggleRow
             label="Email Konfirmasi Order"
@@ -848,6 +985,41 @@ function LogoUploader({
       <p className="text-xs text-ink-500 mt-2 leading-relaxed">
         Paling bagus gambar persegi, minimal 256&times;256 px. Maksimal 2 MB.
       </p>
+    </div>
+  );
+}
+
+
+/**
+ * Pemilih toko di layar Pengaturan.
+ *
+ * Tidak memakai PilihTempat yang umum: di sini TIDAK ADA pilihan "Gabungan".
+ * Pengaturan selalu milik satu toko — nama, logo, warna, alamat jemput tidak
+ * punya versi gabungan, dan menawarkannya hanya akan menghasilkan layar yang
+ * tidak tahu harus menyimpan ke mana.
+ */
+function PilihTempatToko({
+  value, onChange,
+}: { value: "home" | "store"; onChange: (v: "home" | "store") => void }) {
+  const opsi = [
+    { v: "home" as const, label: "Online Rumah" },
+    { v: "store" as const, label: "Toko Bekasi" },
+  ];
+  return (
+    <div role="group" aria-label="Pilih toko" className="inline-flex gap-1 p-1 rounded-xl bg-cherry-50 border border-cherry-100">
+      {opsi.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          onClick={() => onChange(o.v)}
+          aria-pressed={value === o.v}
+          className={`px-3 min-h-9 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+            value === o.v ? "bg-white text-ink-900 shadow-sm" : "text-ink-500 hover:text-ink-700"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { adminApi, decodeToken, type EcomAdminOrderListItem } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
 import { useUrlQueryState } from "@/lib/useUrlQueryState";
+import { PilihTempat, type Tempat } from "@/components/PilihTempat";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 
@@ -49,6 +50,9 @@ export function AdminPesananList() {
   // buka link "Perlu Diproses" langsung mendarat di filter yang benar.
   const [status, setStatus] = useUrlQueryState("status", "paid");
   const [search, setSearch] = useUrlQueryState("search", "");
+  // Kosong = Gabungan. Disimpan di URL supaya bisa di-bookmark dan tombol
+  // back mengembalikan pilihannya, sama seperti penyaring status.
+  const [tempat, setTempat] = useUrlQueryState("location", "");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   // Sprint 4 Chunk 3 (31 Jul 2026) — Bulk selection for shipping actions.
@@ -56,7 +60,9 @@ export function AdminPesananList() {
   const navigate = useNavigate();
 
   // Reset selection saat status/search berubah — cegah aksi bulk salah scope.
-  useEffect(() => { setSelectedIDs(new Set()); }, [status, search]);
+  // Pilihan baris di-reset saat penyaring berubah — cegah aksi massal
+  // mengenai pesanan yang tidak kelihatan lagi di layar.
+  useEffect(() => { setSelectedIDs(new Set()); }, [status, search, tempat]);
 
   const toggleSelect = (id: string) => {
     setSelectedIDs((prev) => {
@@ -90,7 +96,7 @@ export function AdminPesananList() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const resp = await adminApi.listOrders({ status, search: search.trim(), limit: 100 });
+      const resp = await adminApi.listOrders({ status, search: search.trim(), location: tempat || undefined, limit: 100 });
       setItems(resp.items || []);
       setCounts(resp.counts_by_status || {});
     } catch (err) {
@@ -99,7 +105,7 @@ export function AdminPesananList() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [status, search]);
+  }, [status, search, tempat]);
 
   // Debounce search — hindari fire per keystroke.
   useEffect(() => {
@@ -148,6 +154,13 @@ export function AdminPesananList() {
       }
     >
       <div>
+        {/* Pemilih tempat — selalu tampil, juga saat Gabungan. Penyaring yang
+            tidak kelihatan membuat orang mengira angkanya sudah mencakup
+            semuanya. */}
+        <div className="mb-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <PilihTempat value={tempat as Tempat} onChange={(v) => setTempat(v)} />
+        </div>
+
         {/* Search — Sprint 4 Chunk 4: cover semua field + auto lintas status */}
         <div className="relative mb-1">
           <Search
@@ -286,6 +299,21 @@ export function AdminPesananList() {
                         </span>
                         {it.payment_method && (
                           <span className="text-xs text-ink-500">· {it.payment_method}</span>
+                        )}
+                        {/* Toko asal — hanya saat melihat Gabungan. Di tampilan
+                            satu toko, labelnya selalu sama dan cuma jadi
+                            kebisingan. */}
+                        {!tempat && it.store_name && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-ink-100 text-ink-700">
+                            {it.store_name}
+                          </span>
+                        )}
+                        {/* Satu pembayaran, beberapa pesanan. Ditandai supaya
+                            nominal transfer tidak dicocokkan ke satu baris. */}
+                        {it.checkout_group_id && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            1 transfer bersama
+                          </span>
                         )}
                       </div>
                       <p className="text-sm font-bold text-ink-900 truncate">

@@ -29,10 +29,93 @@
   --breakpoint-xs: 24rem;
 }
 
+/* ── Warna merek bisa diganti dari Pengaturan (29 Okt 2026) ───────────────
+   Bu Santi: "kalau bisa berikan pilihan warna beberapa jadi kita bisa ganti
+   manual sesuai warna yang tersedia", dan untuk toko rumah dia memilih biru
+   "seperti di kasir toko".
+
+   Bisa semurah ini karena seluruh storefront memakai utilitas `cherry-*`
+   dan `ink-*` dari blok @theme di atas — Tailwind v4 memancarkannya sebagai
+   variabel CSS, jadi menimpanya di sini mengubah 1.194 pemakaian di 44
+   berkas sekaligus, tanpa menyentuh satu komponen pun.
+
+   KALAU MENAMBAH WARNA BARU: definisikan kesembilan nada cherry + tiga nada
+   ink. Melewatkan satu nada membuatnya jatuh ke merah muda dan muncul
+   sebagai satu elemen nyasar yang sulit dilacak.
+
+   `ink-*` ikut diganti karena nada netralnya hangat (kecokelatan) — di
+   sebelah biru teksnya terlihat kotor, bukan netral. */
+
+:root[data-brand="biru"] {
+  --color-cherry-50:  #EFF6FF;
+  --color-cherry-100: #DBEAFE;
+  --color-cherry-200: #BFDBFE;
+  --color-cherry-300: #93C5FD;
+  --color-cherry-400: #60A5FA;
+  --color-cherry-500: #2563EB;
+  --color-cherry-600: #1D4ED8;
+  --color-cherry-700: #1E40AF;
+  --color-cherry-900: #172554;
+
+  --color-ink-500: #64748B;
+  --color-ink-700: #475569;
+  --color-ink-900: #0F172A;
+}
+
+:root[data-brand="hijau"] {
+  --color-cherry-50:  #F0FDF4;
+  --color-cherry-100: #DCFCE7;
+  --color-cherry-200: #BBF7D0;
+  --color-cherry-300: #86EFAC;
+  --color-cherry-400: #4ADE80;
+  --color-cherry-500: #16A34A;
+  --color-cherry-600: #15803D;
+  --color-cherry-700: #166534;
+  --color-cherry-900: #052E16;
+
+  --color-ink-500: #6B7280;
+  --color-ink-700: #4B5563;
+  --color-ink-900: #111827;
+}
+
+:root[data-brand="ungu"] {
+  --color-cherry-50:  #FAF5FF;
+  --color-cherry-100: #F3E8FF;
+  --color-cherry-200: #E9D5FF;
+  --color-cherry-300: #D8B4FE;
+  --color-cherry-400: #C084FC;
+  --color-cherry-500: #9333EA;
+  --color-cherry-600: #7E22CE;
+  --color-cherry-700: #6B21A8;
+  --color-cherry-900: #2E1065;
+
+  --color-ink-500: #6B7280;
+  --color-ink-700: #4B5563;
+  --color-ink-900: #111827;
+}
+
+:root[data-brand="jingga"] {
+  --color-cherry-50:  #FFF7ED;
+  --color-cherry-100: #FFEDD5;
+  --color-cherry-200: #FED7AA;
+  --color-cherry-300: #FDBA74;
+  --color-cherry-400: #FB923C;
+  --color-cherry-500: #EA580C;
+  --color-cherry-600: #C2410C;
+  --color-cherry-700: #9A3412;
+  --color-cherry-900: #431407;
+
+  --color-ink-500: #78716C;
+  --color-ink-700: #57534E;
+  --color-ink-900: #1C1917;
+}
+
 html {
   font-size: 20px;  /* Match bakeshop-fe base — Bu Santi prefer larger text */
-  color: #2B1318;
-  background: #FFF4F6;
+  /* Lewat variabel, bukan hex — kalau tidak, latar halaman tetap merah muda
+     sementara seisinya berubah warna. */
+  color: var(--color-ink-900);
+  background: var(--color-cherry-50);
   font-family: var(--font-display);
 }
 

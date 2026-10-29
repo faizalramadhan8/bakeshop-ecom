@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Truck, CreditCard, Check, Plus, AlertCircle, Package,
   X, ChevronDown, ChevronRight, Loader2, Wallet,
+  Store,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -77,18 +78,25 @@ export function Checkout() {
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [showAddressSwitcher, setShowAddressSwitcher] = useState(false);
 
+  // Semua pilihan di bawah dipegang PER TOKO. Keranjang boleh berisi barang
+  // dari dua toko, dan tiap toko dikirim dari alamat berbeda — jadi kurir,
+  // ongkir, dan vouchernya masing-masing berdiri sendiri.
   const [rates, setRates] = useState<ShippingRatesResponse | null>(null);
   const [loadingRates, setLoadingRates] = useState(false);
-  const [selectedRate, setSelectedRate] = useState<ShippingRate | null>(null);
+  const [selectedRates, setSelectedRates] = useState<Record<string, ShippingRate | null>>({});
   const [expandedCarrier, setExpandedCarrier] = useState<string | null>(null);
 
   const [placing, setPlacing] = useState(false);
-  const [voucherInput, setVoucherInput] = useState("");
-  const [applyingVoucher, setApplyingVoucher] = useState(false);
-  const [appliedVoucher, setAppliedVoucher] = useState<{ code: string; discount: number; description?: string } | null>(null);
+  const [voucherInputs, setVoucherInputs] = useState<Record<string, string>>({});
+  const [applyingVoucherFor, setApplyingVoucherFor] = useState<string | null>(null);
+  const [appliedVouchers, setAppliedVouchers] = useState<
+    Record<string, { code: string; discount: number; description?: string } | null>
+  >({});
   // Sheet modals — pattern Shopee: card ringkas di flow utama + sheet detail
   // saat customer klik. Cegah wall of options bikin flow chaotic.
-  const [shippingSheetOpen, setShippingSheetOpen] = useState(false);
+  // Berisi `location` toko yang sheet-nya sedang dibuka, bukan boolean —
+  // ada satu pemilih kurir per toko.
+  const [shippingSheetFor, setShippingSheetFor] = useState<string | null>(null);
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
 
   // Buy-now: fetch produk detail supaya bisa tampil nama + harga + subtotal
@@ -216,6 +224,42 @@ export function Checkout() {
       .reduce((s, i) => s + i.subtotal, 0);
   }, [cart, selectedIds, isBuyNow, ctx, buyNowProducts]);
 
+  // Kelompok toko yang sedang di-checkout, dihitung dari isi keranjang (atau
+  // produk buy-now). Sengaja TIDAK menunggu ongkir: bloknya sudah terlihat
+  // sebelum alamat dipilih, jadi customer langsung paham pesanannya akan
+  // dikirim dalam dua paket.
+  const checkoutGroups = useMemo(() => {
+    const m = new Map<string, { location: string; storeName: string; subtotal: number; qty: number; count: number }>();
+    const tambah = (loc: string, nama: string, sub: number, qty: number) => {
+      const key = loc || "home";
+      const g = m.get(key) || { location: key, storeName: nama || "", subtotal: 0, qty: 0, count: 0 };
+      g.subtotal += sub;
+      g.qty += qty;
+      g.count += 1;
+      if (!g.storeName && nama) g.storeName = nama;
+      m.set(key, g);
+    };
+    if (isBuyNow && ctx.mode === "buy_now") {
+      ctx.buy_now_items.forEach((bn) => {
+        const p = buyNowProducts.find((x) => x.id === bn.product_id);
+        if (!p) return;
+        tambah(p.location, p.store_name || "", p.price * bn.quantity, bn.quantity);
+      });
+    } else if (cart) {
+      const set = selectedIds && selectedIds.length > 0 ? new Set(selectedIds) : null;
+      cart.items.forEach((it) => {
+        if (it.unavailable) return;
+        if (set && !set.has(it.id)) return;
+        tambah(it.location, it.store_name, it.subtotal, it.quantity);
+      });
+    }
+    // Urutan tetap: rumah dulu, lalu Bekasi — sama dengan backend, supaya
+    // urutan blok tidak berubah tiap halaman dimuat.
+    return ["home", "store"].map((l) => m.get(l)).filter((g): g is NonNullable<typeof g> => !!g);
+  }, [cart, selectedIds, isBuyNow, ctx, buyNowProducts]);
+
+  const multiToko = checkoutGroups.length > 1;
+
   const localItemCount = useMemo(() => {
     if (isBuyNow) return ctx.mode === "buy_now" ? ctx.buy_now_items.length : 0;
     if (!cart) return 0;
@@ -238,7 +282,7 @@ export function Checkout() {
   useEffect(() => {
     if (!selectedAddress) return;
     setLoadingRates(true);
-    setSelectedRate(null);
+    setSelectedRates({});
     checkoutApi
       .getShippingRates(selectedAddress.id, {
         selected_item_ids: selectedIds,
@@ -246,42 +290,56 @@ export function Checkout() {
       })
       .then((r) => {
         setRates(r);
-        if (r.rates.length > 0) {
-          // Auto-pick termurah — bukan first (dulu bug: kadang termahal jadi default).
-          const cheapest = [...r.rates].sort((a, b) => a.cost - b.cost)[0];
-          setSelectedRate(cheapest);
-          // Auto-expand grup carrier termurah.
-          setExpandedCarrier(cheapest.courier_name || cheapest.courier);
-        }
+        // Auto-pilih termurah PER TOKO — bukan yang pertama (dulu bug:
+        // kadang termahal jadi bawaan).
+        const awal: Record<string, ShippingRate | null> = {};
+        (r.groups ?? []).forEach((g) => {
+          if (g.rates.length === 0) return;
+          awal[g.location] = [...g.rates].sort((a, b) => a.cost - b.cost)[0];
+        });
+        setSelectedRates(awal);
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Gagal ambil ongkir"))
       .finally(() => setLoadingRates(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAddress?.id]);
 
-  const applyVoucher = async () => {
-    const code = voucherInput.trim();
+  // Voucher diperiksa terhadap toko tempat kodenya dipakai. Kode milik toko
+  // lain ditolak backend dengan pesan yang menyebut tokonya — supaya customer
+  // tahu harus memakainya di blok yang mana, bukan sekadar "tidak berlaku".
+  const applyVoucher = async (location: string) => {
+    const code = (voucherInputs[location] || "").trim();
     if (!code) return;
-    setApplyingVoucher(true);
+    setApplyingVoucherFor(location);
     try {
-      const resp = await checkoutApi.validateVoucher(code);
-      setAppliedVoucher({ code: resp.code, discount: resp.discount, description: resp.description });
+      const resp = await checkoutApi.validateVoucher(code, location, selectedIds);
+      setAppliedVouchers((prev) => ({
+        ...prev,
+        [location]: { code: resp.code, discount: resp.discount, description: resp.description },
+      }));
       toast.success(`Voucher aktif: hemat ${formatRp(resp.discount)}`);
     } catch (err) {
-      setAppliedVoucher(null);
+      setAppliedVouchers((prev) => ({ ...prev, [location]: null }));
       toast.error(err instanceof Error ? err.message : "Voucher tidak valid");
     } finally {
-      setApplyingVoucher(false);
+      setApplyingVoucherFor(null);
     }
   };
 
-  const removeVoucher = () => {
-    setAppliedVoucher(null);
-    setVoucherInput("");
+  const removeVoucher = (location: string) => {
+    setAppliedVouchers((prev) => ({ ...prev, [location]: null }));
+    setVoucherInputs((prev) => ({ ...prev, [location]: "" }));
   };
 
-  const voucherDiscount = appliedVoucher?.discount || 0;
-  const shippingCost = selectedRate?.cost || 0;
+  const voucherDiscount = checkoutGroups.reduce(
+    (sum, g) => sum + (appliedVouchers[g.location]?.discount || 0), 0);
+  const shippingCost = checkoutGroups.reduce(
+    (sum, g) => sum + (selectedRates[g.location]?.cost || 0), 0);
+  // Semua toko WAJIB punya kurir. Checkout dengan satu toko saja yang terpilih
+  // akan ditolak backend — lebih baik tombolnya mati dengan alasan jelas
+  // daripada ditolak setelah ditekan.
+  const semuaKurirDipilih =
+    checkoutGroups.length > 0 && checkoutGroups.every((g) => !!selectedRates[g.location]);
   const total = Math.max(0, localSubtotal - voucherDiscount) + shippingCost;
 
   const placeOrder = async () => {
@@ -289,8 +347,13 @@ export function Checkout() {
       toast.error("Pilih alamat pengiriman");
       return;
     }
-    if (!selectedRate) {
-      toast.error("Pilih metode pengiriman");
+    if (!semuaKurirDipilih) {
+      // Menyebut toko mana yang belum — di keranjang dua toko, "pilih
+      // pengiriman" saja tidak memberi tahu di blok mana yang kurang.
+      const kurang = checkoutGroups.find((g) => !selectedRates[g.location]);
+      toast.error(kurang
+        ? `Pilih pengiriman untuk ${kurang.storeName || "toko"}`
+        : "Pilih metode pengiriman");
       return;
     }
     // Hanya wajib di mode payment gateway. Saat transfer manual tidak ada
@@ -308,15 +371,22 @@ export function Checkout() {
     try {
       const resp = await checkoutApi.createOrder({
         address_id: selectedAddress.id,
-        // Kirim CODE (bukan display name) — BE pakai untuk call Biteship
-        // /v1/orders. Display name di *_name untuk render UI.
-        shipping_courier: selectedRate.courier,
-        shipping_courier_name: selectedRate.courier_name,
-        shipping_service: selectedRate.service,
-        shipping_service_name: selectedRate.service_name,
-        shipping_cost: selectedRate.cost,
-        shipping_etd: selectedRate.etd,
-        voucher_code: appliedVoucher?.code,
+        // Satu entri per toko. Kirim CODE kurir (bukan display name) — BE
+        // memakainya untuk memanggil Biteship /v1/orders; display name di
+        // *_name untuk render UI.
+        groups: checkoutGroups.map((g) => {
+          const r = selectedRates[g.location]!;
+          return {
+            location: g.location as "home" | "store",
+            shipping_courier: r.courier,
+            shipping_courier_name: r.courier_name,
+            shipping_service: r.service,
+            shipping_service_name: r.service_name,
+            shipping_cost: r.cost,
+            shipping_etd: r.etd,
+            voucher_code: appliedVouchers[g.location]?.code,
+          };
+        }),
         // Kosong di mode transfer manual — backend memang tidak memakainya
         // di jalur itu (lihat CreateOrder: channelSaved dikosongkan).
         payment_channel: selectedChannel?.payment_code ?? "",
@@ -328,9 +398,9 @@ export function Checkout() {
       // Clear context — kita sudah pakai.
       sessionStorage.removeItem("checkoutContext");
       trackEvent("purchase", {
-        transaction_id: resp.order_id,
+        transaction_id: resp.checkout_group_id || resp.order_id,
         currency: "IDR",
-        value: resp.total,
+        value: resp.grand_total ?? resp.total,
         shipping: resp.shipping_cost,
       });
       // PG DOKU — redirect ke checkout link supaya customer bisa bayar VA/
@@ -340,7 +410,12 @@ export function Checkout() {
         window.location.href = resp.payment_url;
         return;
       }
-      toast.success("Pesanan berhasil dibuat! Yuk lanjut pembayaran.");
+      // Keranjang dua toko = dua pesanan, satu pembayaran. Dikatakan di
+      // sini supaya customer tidak kaget melihat dua baris di daftar
+      // pesanannya dan mengira dia ditagih dua kali.
+      toast.success((resp.orders?.length ?? 1) > 1
+        ? `${resp.orders.length} pesanan dibuat (satu per toko). Pembayarannya satu kali.`
+        : "Pesanan berhasil dibuat! Yuk lanjut pembayaran.");
       navigate(`/pesanan/${resp.order_id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal checkout");
@@ -353,14 +428,17 @@ export function Checkout() {
     return <div className="max-w-4xl mx-auto p-6 text-center text-ink-500">Memuat…</div>;
   }
 
-  const groupedRates = rates ? groupByCarrier(rates.rates) : [];
-  // Cheapest rate across all couriers — untuk badge "Termurah" di card
-  // Opsi Pengiriman. Auto-select saat rates load (line ~221) sudah pakai
-  // logika sama, jadi selectedRate awalnya = cheapest sampai customer ubah.
-  const cheapestRate = rates && rates.rates.length > 0
-    ? [...rates.rates].sort((a, b) => a.cost - b.cost)[0]
-    : null;
-  const isCheapestSelected = !!(selectedRate && cheapestRate && selectedRate === cheapestRate);
+  // Ongkir dipetakan per toko. `rateGroup(loc)` dipakai blok toko di bawah.
+  const rateGroup = (loc: string) => (rates?.groups ?? []).find((g) => g.location === loc) || null;
+  const groupedRatesFor = (loc: string) => {
+    const g = rateGroup(loc);
+    return g ? groupByCarrier(g.rates) : [];
+  };
+  const cheapestFor = (loc: string) => {
+    const g = rateGroup(loc);
+    if (!g || g.rates.length === 0) return null;
+    return [...g.rates].sort((a, b) => a.cost - b.cost)[0];
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-4 pb-40 sm:pb-24">
@@ -451,71 +529,154 @@ export function Checkout() {
         )}
       </section>
 
-      {/* Section 2 — Opsi Pengiriman (pattern Shopee: card ringkas, tap open
-          sheet detail supaya customer tidak overwhelmed dengan wall kurir) */}
-      <section className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
-        <button
-          type="button"
-          onClick={() => selectedAddress && groupedRates.length > 0 && setShippingSheetOpen(true)}
-          disabled={!selectedAddress || loadingRates || groupedRates.length === 0}
-          className="w-full flex items-start gap-3 text-left disabled:opacity-100 disabled:cursor-default"
-        >
-          <div className="flex items-center gap-2 shrink-0 pt-0.5">
-            <Truck size={16} className="text-cherry-500" aria-hidden="true" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <h2 className="text-sm font-black text-ink-900">Opsi Pengiriman</h2>
-              {selectedAddress && groupedRates.length > 0 && (
-                <span className="text-xs font-bold text-cherry-500 shrink-0 inline-flex items-center gap-0.5">
-                  {selectedRate ? "Ubah" : "Lihat Semua"}
-                  <ChevronRight size={12} aria-hidden="true" />
-                </span>
-              )}
-            </div>
-            {!selectedAddress ? (
-              <p className="text-sm text-ink-500">Isi alamat pengiriman dulu untuk hitung ongkir.</p>
-            ) : loadingRates ? (
-              <div className="flex items-center gap-2 text-ink-500 text-sm">
-                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                Menghitung ongkir…
-              </div>
-            ) : groupedRates.length === 0 ? (
-              <div className="flex items-start gap-2 text-ink-700">
-                <AlertCircle size={16} className="text-cherry-500 shrink-0 mt-0.5" aria-hidden="true" />
-                <p className="text-sm">Belum ada kurir yang melayani alamat ini. Coba pilih alamat lain.</p>
-              </div>
-            ) : selectedRate ? (
-              // Preview kurir terpilih — mirip Shopee list opsi
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
-                  <Truck size={18} className="text-cherry-500" strokeWidth={1.5} aria-hidden="true" />
+      {/* Section 2 — Pengiriman, SATU BLOK PER TOKO.
+          Tiap toko dikirim dari alamat berbeda, jadi kurir dan ongkirnya
+          berdiri sendiri. Voucher ikut di dalam bloknya: kode milik satu toko
+          hanya memotong tagihan toko itu, dan kotak voucher yang berdiri
+          sendiri di bawah akan membuat customer mengira potongannya berlaku
+          untuk seluruh keranjang. */}
+      {multiToko && (
+        <p className="text-xs text-ink-500 mb-2 px-1 leading-relaxed">
+          Pesananmu dari <b>{checkoutGroups.length} toko</b>, jadi dikirim dalam{" "}
+          {checkoutGroups.length} paket terpisah dengan ongkir masing-masing.
+          Pembayarannya tetap <b>satu kali</b>.
+        </p>
+      )}
+
+      {checkoutGroups.map((g) => {
+        const grup = rateGroup(g.location);
+        const dipilih = selectedRates[g.location] || null;
+        const termurah = cheapestFor(g.location);
+        const adaKurir = (grup?.rates.length ?? 0) > 0;
+        const voucher = appliedVouchers[g.location] || null;
+        return (
+          <section key={g.location} className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
+            {/* Kepala toko — hanya saat memang ada lebih dari satu toko.
+                Menampilkannya untuk satu toko cuma menambah baris tanpa
+                menjawab pertanyaan apa pun. */}
+            {multiToko && (
+              <div className="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-cherry-100">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Store size={16} className="text-cherry-500 shrink-0" aria-hidden="true" />
+                  <p className="text-sm font-black text-ink-900 truncate">{g.storeName || "Toko"}</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-sm font-black text-ink-900 truncate">
-                      {selectedRate.courier_name} · {selectedRate.service_name}
-                    </p>
-                    {isCheapestSelected && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
-                        Termurah
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-ink-500">
-                    Estimasi {formatETD(selectedRate.etd)}
-                  </p>
-                </div>
-                <p className="text-base font-black text-cherry-500 shrink-0">
-                  {formatRp(selectedRate.cost)}
+                <p className="text-xs text-ink-500 shrink-0">
+                  {g.qty} item · {formatRp(g.subtotal)}
                 </p>
               </div>
-            ) : (
-              <p className="text-sm text-ink-500">Tap untuk pilih kurir</p>
             )}
-          </div>
-        </button>
-      </section>
+
+            <button
+              type="button"
+              onClick={() => selectedAddress && adaKurir && setShippingSheetFor(g.location)}
+              disabled={!selectedAddress || loadingRates || !adaKurir}
+              className="w-full flex items-start gap-3 text-left disabled:opacity-100 disabled:cursor-default"
+            >
+              <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                <Truck size={16} className="text-cherry-500" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h2 className="text-sm font-black text-ink-900">
+                    {multiToko ? "Pengiriman" : "Opsi Pengiriman"}
+                  </h2>
+                  {selectedAddress && adaKurir && (
+                    <span className="text-xs font-bold text-cherry-500 shrink-0 inline-flex items-center gap-0.5">
+                      {dipilih ? "Ubah" : "Lihat Semua"}
+                      <ChevronRight size={12} aria-hidden="true" />
+                    </span>
+                  )}
+                </div>
+                {!selectedAddress ? (
+                  <p className="text-sm text-ink-500">Isi alamat pengiriman dulu untuk hitung ongkir.</p>
+                ) : loadingRates ? (
+                  <div className="flex items-center gap-2 text-ink-500 text-sm">
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                    Menghitung ongkir…
+                  </div>
+                ) : !adaKurir ? (
+                  <div className="flex items-start gap-2 text-ink-700">
+                    <AlertCircle size={16} className="text-cherry-500 shrink-0 mt-0.5" aria-hidden="true" />
+                    {/* Pesan dari backend menyebut tokonya; kalau kosong,
+                        pakai kalimat umum. */}
+                    <p className="text-sm">
+                      {grup?.error || "Belum ada kurir yang melayani alamat ini. Coba pilih alamat lain."}
+                    </p>
+                  </div>
+                ) : dipilih ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
+                      <Truck size={18} className="text-cherry-500" strokeWidth={1.5} aria-hidden="true" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-sm font-black text-ink-900 truncate">
+                          {dipilih.courier_name} · {dipilih.service_name}
+                        </p>
+                        {termurah && dipilih === termurah && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
+                            Termurah
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-ink-500">Estimasi {formatETD(dipilih.etd)}</p>
+                    </div>
+                    <p className="text-base font-black text-cherry-500 shrink-0">
+                      {formatRp(dipilih.cost)}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-ink-500">Tap untuk pilih kurir</p>
+                )}
+              </div>
+            </button>
+
+            {/* Voucher toko ini */}
+            <div className="mt-3 pt-3 border-t border-cherry-100">
+              <p className="text-xs font-bold text-ink-700 mb-2">
+                {multiToko ? `Voucher ${g.storeName || "toko ini"}` : "Voucher / Kode Promo"}
+              </p>
+              {voucher ? (
+                <div className="flex items-center justify-between gap-2 bg-cherry-50 border border-cherry-200 rounded-xl px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-cherry-600 truncate">{voucher.code}</p>
+                    <p className="text-xs text-ink-500 truncate">
+                      {voucher.description || `Hemat ${formatRp(voucher.discount)}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeVoucher(g.location)}
+                    aria-label="Hapus voucher"
+                    className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-ink-700 hover:bg-white"
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={voucherInputs[g.location] || ""}
+                    onChange={(e) =>
+                      setVoucherInputs((prev) => ({ ...prev, [g.location]: e.target.value.toUpperCase() }))
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && applyVoucher(g.location)}
+                    placeholder="Kode voucher"
+                    className="flex-1 px-3 py-2.5 rounded-xl border border-cherry-200 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400"
+                    aria-label={`Kode voucher ${g.storeName || ""}`.trim()}
+                  />
+                  <button
+                    onClick={() => applyVoucher(g.location)}
+                    disabled={!(voucherInputs[g.location] || "").trim() || applyingVoucherFor === g.location}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-40"
+                  >
+                    {applyingVoucherFor === g.location ? "…" : "Apply"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })}
 
       {/* Section 3 — Metode Pembayaran (card summary, tap untuk buka sheet) */}
       <section className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
@@ -599,48 +760,6 @@ export function Checkout() {
         </button>
       </section>
 
-      {/* Section 4 — Voucher (pisah dari Payment supaya flow lebih ringan) */}
-      <section className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
-        <h2 className="text-sm font-black text-ink-900 mb-3">Voucher / Kode Promo</h2>
-        <div>
-          {appliedVoucher ? (
-            <div className="flex items-center justify-between gap-2 bg-cherry-50 border border-cherry-200 rounded-xl px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-sm font-black text-cherry-600 truncate">{appliedVoucher.code}</p>
-                {appliedVoucher.description && (
-                  <p className="text-xs text-ink-500 truncate">{appliedVoucher.description}</p>
-                )}
-              </div>
-              <button
-                onClick={removeVoucher}
-                aria-label="Hapus voucher"
-                className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-ink-700 hover:bg-white"
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input
-                value={voucherInput}
-                onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && applyVoucher()}
-                placeholder="Kode voucher"
-                className="flex-1 px-3 py-2.5 rounded-xl border border-cherry-200 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400"
-                aria-label="Kode voucher"
-              />
-              <button
-                onClick={applyVoucher}
-                disabled={!voucherInput.trim() || applyingVoucher}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-40"
-              >
-                {applyingVoucher ? "…" : "Apply"}
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* Rincian Pembayaran */}
       <section className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
         <div className="flex items-center gap-2 mb-3">
@@ -718,24 +837,45 @@ export function Checkout() {
               {formatRp(localSubtotal)}
             </dd>
           </div>
-          <div className="flex justify-between">
-            <dt className="text-ink-700">Subtotal Pengiriman</dt>
-            <dd className="font-bold text-ink-900">
-              {selectedRate ? formatRp(selectedRate.cost) : (
-                <span className="text-ink-500 font-normal">Pilih kurir dulu</span>
-              )}
-            </dd>
-          </div>
-          {appliedVoucher && (
-            <div className="flex justify-between text-cherry-600">
-              <dt className="font-bold">Voucher Diskon</dt>
-              <dd className="font-bold">−{formatRp(appliedVoucher.discount)}</dd>
+          {/* Ongkir dirinci per toko saat ada dua — satu angka gabungan
+              membuat customer tidak bisa memeriksa mana yang mahal. */}
+          {multiToko ? (
+            checkoutGroups.map((g) => (
+              <div key={g.location} className="flex justify-between">
+                <dt className="text-ink-700">Ongkir {g.storeName || "toko"}</dt>
+                <dd className="font-bold text-ink-900">
+                  {selectedRates[g.location] ? formatRp(selectedRates[g.location]!.cost) : (
+                    <span className="text-ink-500 font-normal">Pilih kurir dulu</span>
+                  )}
+                </dd>
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between">
+              <dt className="text-ink-700">Subtotal Pengiriman</dt>
+              <dd className="font-bold text-ink-900">
+                {semuaKurirDipilih ? formatRp(shippingCost) : (
+                  <span className="text-ink-500 font-normal">Pilih kurir dulu</span>
+                )}
+              </dd>
             </div>
           )}
+          {checkoutGroups.map((g) => {
+            const v = appliedVouchers[g.location];
+            if (!v) return null;
+            return (
+              <div key={`v-${g.location}`} className="flex justify-between text-cherry-600">
+                <dt className="font-bold">
+                  Voucher {v.code}{multiToko ? ` · ${g.storeName || "toko"}` : ""}
+                </dt>
+                <dd className="font-bold">−{formatRp(v.discount)}</dd>
+              </div>
+            );
+          })}
           <div className="border-t border-cherry-100 pt-2 mt-2 flex justify-between items-center">
             <dt className="text-base font-black text-ink-900">Total Pembayaran</dt>
             <dd className="text-xl font-black text-cherry-500">
-              {selectedRate ? formatRp(total) : (
+              {semuaKurirDipilih ? formatRp(total) : (
                 <span className="text-ink-500 text-sm font-normal">Menunggu ongkir</span>
               )}
             </dd>
@@ -759,7 +899,7 @@ export function Checkout() {
             <p className="text-base sm:text-lg font-black text-cherry-500 leading-tight truncate">
               {!selectedAddress ? (
                 <span className="text-ink-500 text-sm font-normal">Pilih alamat dulu</span>
-              ) : !selectedRate ? (
+              ) : !semuaKurirDipilih ? (
                 <span className="text-ink-500 text-sm font-normal">Pilih kurir dulu</span>
               ) : pgEnabled && !selectedChannel ? (
                 <span className="text-ink-500 text-sm font-normal">Pilih metode bayar</span>
@@ -775,7 +915,7 @@ export function Checkout() {
                pesanan terbuat, lalu gagal di sisi PG dan jatuh ke manual
                tanpa customer tahu apa yang terjadi. Di mode transfer manual
                tidak ada yang perlu dipilih, jadi tidak ikut dihalangi. */
-            disabled={placing || !selectedAddress || !selectedRate || (pgEnabled && !selectedChannel)}
+            disabled={placing || !selectedAddress || !semuaKurirDipilih || (pgEnabled && !selectedChannel)}
             className="shrink-0 px-4 sm:px-6 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-40 active:scale-[0.98]"
           >
             {placing ? (
@@ -791,18 +931,21 @@ export function Checkout() {
       </div>
 
       {/* Bottom sheet — Opsi Pengiriman (pattern Shopee) */}
-      {shippingSheetOpen && (
+      {shippingSheetFor && (
         <ShippingSheet
-          groupedRates={groupedRates}
+          storeName={multiToko
+            ? (checkoutGroups.find((g) => g.location === shippingSheetFor)?.storeName || "")
+            : ""}
+          groupedRates={groupedRatesFor(shippingSheetFor)}
           expandedCarrier={expandedCarrier}
           setExpandedCarrier={setExpandedCarrier}
-          selected={selectedRate}
-          cheapest={cheapestRate}
+          selected={selectedRates[shippingSheetFor] || null}
+          cheapest={cheapestFor(shippingSheetFor)}
           onSelect={(r) => {
-            setSelectedRate(r);
-            setShippingSheetOpen(false);
+            setSelectedRates((prev) => ({ ...prev, [shippingSheetFor]: r }));
+            setShippingSheetFor(null);
           }}
-          onClose={() => setShippingSheetOpen(false)}
+          onClose={() => setShippingSheetFor(null)}
         />
       )}
 
@@ -827,6 +970,7 @@ export function Checkout() {
 // expandable carrier group + radio card per service.
 
 function ShippingSheet({
+  storeName,
   groupedRates,
   expandedCarrier,
   setExpandedCarrier,
@@ -835,6 +979,8 @@ function ShippingSheet({
   onSelect,
   onClose,
 }: {
+  /** Kosong kalau cuma satu toko — judulnya tidak perlu menyebut toko. */
+  storeName: string;
   groupedRates: Array<{ carrier: string; options: ShippingRate[] }>;
   expandedCarrier: string | null;
   setExpandedCarrier: (c: string | null) => void;
@@ -859,7 +1005,9 @@ function ShippingSheet({
       <div className="relative bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col modal-sheet-in">
         {/* Header */}
         <div className="px-5 sm:px-6 pt-5 pb-3 border-b border-cherry-100 flex items-center gap-3 shrink-0">
-          <h2 className="flex-1 text-base font-black text-ink-900">Opsi Pengiriman</h2>
+          <h2 className="flex-1 text-base font-black text-ink-900 truncate">
+            Opsi Pengiriman{storeName ? ` · ${storeName}` : ""}
+          </h2>
           <button type="button" onClick={onClose} aria-label="Tutup" className="w-11 h-11 rounded-xl flex items-center justify-center text-ink-500 hover:bg-cherry-50">
             <X size={16} aria-hidden="true" />
           </button>

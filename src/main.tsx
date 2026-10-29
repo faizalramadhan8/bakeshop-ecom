@@ -6,6 +6,11 @@ import "./index.css";
 import App from "./App";
 import { initAnalytics } from "@/lib/analytics";
 import { registerSW } from "@/lib/push";
+import { pasangBrandDariIngatan } from "@/lib/brandTheme";
+
+// Warna merek dipasang SEBELUM React menggambar. Menunggu pengaturan tiba
+// membuat halaman berkedip merah muda sekejap tiap kali dibuka.
+pasangBrandDariIngatan();
 
 // Init GA4 + Meta Pixel (kalau env var di-set saat build).
 initAnalytics();
@@ -25,7 +30,7 @@ createRoot(document.getElementById("root")!).render(
         toastOptions={{
           style: {
             background: "#2B1318",
-            color: "#FFF4F6",
+            color: "var(--color-cherry-50)",
             fontSize: "14px",
             fontWeight: 600,
             borderRadius: "12px",

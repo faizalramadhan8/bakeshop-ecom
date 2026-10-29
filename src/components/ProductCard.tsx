@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { type EcomProductListItem, formatRp } from "@/lib/api";
-import { Package, Heart } from "lucide-react";
+import { Package, Heart, Store } from "lucide-react";
 import { useWishlistState } from "@/lib/wishlist";
 
 export function ProductCard({ p }: { p: EcomProductListItem }) {
@@ -75,6 +75,16 @@ export function ProductCard({ p }: { p: EcomProductListItem }) {
             </p>
           )}
         </div>
+        {/* Toko asal. Dikirim dari tempat berbeda berarti ongkir berbeda, dan
+            barang dari dua toko dalam satu keranjang berarti dua paket.
+            Hanya tampil kalau namanya ada — kartu untuk satu toko tidak perlu
+            baris yang isinya selalu sama. */}
+        {p.store_name && (
+          <p className="text-[11px] text-ink-500 truncate inline-flex items-center gap-1 mt-0.5">
+            <Store size={11} className="shrink-0" aria-hidden="true" />
+            {p.store_name}
+          </p>
+        )}
       </div>
     </Link>
   );

@@ -584,6 +584,46 @@ export function AdminPesananDetail() {
             </div>
           </dl>
 
+          {/* Satu transfer menutup beberapa pesanan.
+              Tanpa keterangan ini Bu Santi melihat dua tagihan untuk satu
+              bukti transfer dan berisiko mengira uangnya kurang — atau,
+              kalau dikonfirmasi dua kali, mengira uangnya masuk dua kali. */}
+          {(order.group_orders?.length ?? 0) > 1 && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-black text-amber-900 mb-1.5">
+                Pesanan {(order.group_orders!.findIndex((g) => g.is_self) + 1)} dari{" "}
+                {order.group_orders!.length} dalam satu transfer
+              </p>
+              <ul className="space-y-0.5">
+                {order.group_orders!.map((g) => (
+                  <li key={g.order_id} className="text-xs flex justify-between gap-2">
+                    {g.is_self ? (
+                      <span className="truncate font-bold text-amber-900">
+                        {g.store_name} (pesanan ini)
+                      </span>
+                    ) : (
+                      <Link
+                        to={`/admin/pesanan/${g.order_id}`}
+                        className="truncate text-amber-900 underline hover:no-underline"
+                      >
+                        {g.store_name}
+                      </Link>
+                    )}
+                    <span className="tabular-nums shrink-0 text-amber-900">{formatRp(g.total)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-900 mt-1.5 pt-1.5 border-t border-amber-200 flex justify-between gap-2">
+                <b>Total transfer customer</b>
+                <b className="tabular-nums">{formatRp(order.group_total ?? order.total)}</b>
+              </p>
+              <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                Cocokkan mutasi dengan <b>total transfer</b>, bukan total pesanan ini.
+                Tiap pesanan tetap dikonfirmasi sendiri-sendiri.
+              </p>
+            </div>
+          )}
+
           {/* Bukti transfer — ditampilkan HANYA untuk transfer manual, karena
               pembayaran lewat payment gateway tidak butuh bukti manual.
               Ditaruh tepat di bawah total supaya Bu Santi bisa mencocokkan

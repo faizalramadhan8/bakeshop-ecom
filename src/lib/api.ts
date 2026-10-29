@@ -167,12 +167,14 @@ export const adminApi = {
     request<null>("DELETE", `/ecom/admin/categories/${id}`, undefined, "admin"),
 
   // Ecom orders admin (Sprint 1).
-  listOrders: (params?: { status?: string; search?: string; cursor?: string; limit?: number }) => {
+  listOrders: (params?: { status?: string; search?: string; cursor?: string; limit?: number; location?: string }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     if (params?.search) q.set("search", params.search);
     if (params?.cursor) q.set("cursor", params.cursor);
     if (params?.limit) q.set("limit", String(params.limit));
+    // Kosong = Gabungan (dua toko). Lihat pemilih tempat di AdminPesananList.
+    if (params?.location) q.set("location", params.location);
     const qs = q.toString();
     return request<EcomAdminOrderListResponse>("GET", `/ecom/admin/orders${qs ? "?" + qs : ""}`, undefined, "admin");
   },
@@ -192,10 +194,16 @@ export const adminApi = {
     request<{ balance: number; currency: string }>("GET", "/ecom/admin/biteship/balance", undefined, "admin"),
 
   // Sprint 1 #4 (30 Jul 2026) — Komplain customer admin panel.
-  listComplaints: (status?: string) =>
+  listComplaints: (status?: string, location?: string) =>
     request<ComplaintAdmin[]>(
       "GET",
-      `/ecom/admin/complaints${status && status !== "all" ? `?status=${status}` : ""}`,
+      (() => {
+        const q = new URLSearchParams();
+        if (status && status !== "all") q.set("status", status);
+        if (location) q.set("location", location);
+        const qs = q.toString();
+        return `/ecom/admin/complaints${qs ? "?" + qs : ""}`;
+      })(),
       undefined,
       "admin",
     ),
@@ -229,11 +237,12 @@ export const adminApi = {
     request<null>("POST", `/ecom/admin/products/${productID}/dispatch-restock`, {}, "admin"),
 
   // Sprint 4 Chunk 1 (30 Jul 2026) — Customer management.
-  listCustomers: (params: { search?: string; page?: number; limit?: number } = {}) => {
+  listCustomers: (params: { search?: string; page?: number; limit?: number; location?: string } = {}) => {
     const q = new URLSearchParams();
     if (params.search) q.set("search", params.search);
     if (params.page) q.set("page", String(params.page));
     if (params.limit) q.set("limit", String(params.limit));
+    if (params.location) q.set("location", params.location);
     const suffix = q.toString() ? `?${q}` : "";
     return request<EcomAdminCustomerListResponse>("GET", `/ecom/admin/customers${suffix}`, undefined, "admin");
   },
@@ -249,10 +258,15 @@ export const adminApi = {
     request<EcomRefundResponse[]>("GET", `/ecom/admin/orders/${orderID}/refunds`, undefined, "admin"),
 
   // Sprint 4 Chunk 5 (31 Jul 2026) — Ecom settings.
-  getSettings: () =>
-    request<EcomSettings>("GET", "/ecom/admin/settings", undefined, "admin"),
-  updateSettings: (patch: Partial<EcomSettings>) =>
-    request<EcomSettings>("PATCH", "/ecom/admin/settings", patch, "admin"),
+  /** `location` kosong = baris toko rumah (perilaku sebelum pengaturan
+   *  dipecah per tempat). Tiap toko punya nama, logo, warna, nomor WA, dan
+   *  ALAMAT JEMPUT sendiri. */
+  getSettings: (location?: string) =>
+    request<EcomSettings>("GET",
+      `/ecom/admin/settings${location ? `?location=${location}` : ""}`, undefined, "admin"),
+  updateSettings: (patch: Partial<EcomSettings>, location?: string) =>
+    request<EcomSettings>("PATCH",
+      `/ecom/admin/settings${location ? `?location=${location}` : ""}`, patch, "admin"),
 
   // Sprint 5 Chunk 6 (2 Aug 2026) — Broadcast push.
   sendBroadcast: (data: { title: string; body: string; url?: string }) =>
@@ -261,8 +275,9 @@ export const adminApi = {
     request<EcomBroadcastResponse[]>("GET", "/ecom/admin/broadcasts", undefined, "admin"),
 
   // Sprint 5 Chunk 8 (2 Aug 2026) — Analytics deep.
-  getAnalytics: () =>
-    request<EcomAdminAnalytics>("GET", "/ecom/admin/analytics", undefined, "admin"),
+  getAnalytics: (location?: string) =>
+    request<EcomAdminAnalytics>("GET",
+      `/ecom/admin/analytics${location ? `?location=${location}` : ""}`, undefined, "admin"),
 
   // Sprint 5 Chunk 9 (2 Aug 2026) — Activity log.
   // Sprint 5 Chunk 10 (2 Aug 2026) — Bulk product ops.
@@ -352,6 +367,7 @@ export interface EcomPriceTier {
   price: number;
   target_type: string;
   note?: string;
+  starts_at?: string | null;
   expires_at?: string | null;
 }
 
@@ -360,7 +376,11 @@ export interface TierPayload {
   price: number;
   target_type: "all_customers";
   note?: string;
-  duration_days?: number;
+  /** "YYYY-MM-DD". String kosong = hapus batasnya. Backend membaca
+   *  `expires_at` sebagai AKHIR hari itu, jadi "sampai 31 Des" mencakup
+   *  31 Desember penuh. */
+  starts_at?: string;
+  expires_at?: string;
 }
 
 export interface EcomStockMovement {
@@ -437,6 +457,11 @@ export interface EcomAdminOrderListItem {
   awb?: string;
   created_at: string;
   payment_method?: string;
+  /** Toko asal pesanan — menentukan paketnya dijemput di mana. */
+  location: "home" | "store";
+  store_name?: string;
+  /** Terisi kalau pesanan ini satu pembayaran dengan pesanan lain. */
+  checkout_group_id?: string;
 }
 
 export interface EcomAdminOrderListResponse {
@@ -449,6 +474,8 @@ export interface EcomAdminOrderListResponse {
 export interface VoucherAdmin {
   id: string;
   code: string;
+  /** Toko pemilik voucher. Potongannya HANYA mengenai pesanan toko ini. */
+  location: "home" | "store";
   description?: string;
   type: "percent" | "fixed";
   value: number;
@@ -464,6 +491,7 @@ export interface VoucherAdmin {
 
 export interface VoucherPayload {
   code: string;
+  location: "home" | "store";
   description?: string;
   type: "percent" | "fixed";
   value: number;
@@ -530,6 +558,10 @@ export interface EcomProductListItem {
   weight_grams?: number;
   min_order: number;
   is_low_stock: boolean;
+  /** Toko yang menjual barang ini. Storefront melayani dua toko sejak
+   *  30 Okt 2026, dan jarak kirimnya menentukan ongkir. */
+  location: "home" | "store";
+  store_name?: string;
 }
 
 export interface EcomProductDetail extends EcomProductListItem {
@@ -544,7 +576,9 @@ export interface EcomProductListResponse {
 }
 
 export const publicApi = {
-  listCategories: () => request<EcomCategory[]>("GET", "/ecom/categories"),
+  /** `location` kosong = hitung lintas toko (beranda); diisi = satu toko. */
+  listCategories: (location?: string) =>
+    request<EcomCategory[]>("GET", `/ecom/categories${location ? `?location=${location}` : ""}`),
   listProducts: (params?: {
     category?: string;
     search?: string;
@@ -554,6 +588,8 @@ export const publicApi = {
     // Sprint 2 #7 — filter harga
     min_price?: number;
     max_price?: number;
+    /** Kosong = semua toko. Diisi = halaman toko. */
+    location?: string;
   }) => {
     const q = new URLSearchParams();
     if (params?.category) q.set("category", params.category);
@@ -563,6 +599,7 @@ export const publicApi = {
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.min_price && params.min_price > 0) q.set("min_price", String(params.min_price));
     if (params?.max_price && params.max_price > 0) q.set("max_price", String(params.max_price));
+    if (params?.location) q.set("location", params.location);
     const qs = q.toString();
     return request<EcomProductListResponse>("GET", `/ecom/products${qs ? "?" + qs : ""}`);
   },
@@ -625,12 +662,27 @@ export interface CartItem {
   min_order: number;
   weight_grams?: number;
   subtotal: number;
+  /** Toko asal barang — menentukan paket mana dia ikut dan ongkirnya. */
+  location: "home" | "store";
+  store_name: string;
   unavailable?: boolean;
   unavailable_reason?: string;
 }
 
+/** Isi keranjang dari satu toko. Tiap toko dikirim terpisah dengan ongkirnya
+ *  sendiri, jadi checkout menghasilkan satu pesanan per kelompok. */
+export interface CartGroup {
+  location: "home" | "store";
+  store_name: string;
+  items: CartItem[];
+  subtotal: number;
+  total_qty: number;
+  min_order_amount: number;
+}
+
 export interface Cart {
   items: CartItem[];
+  groups: CartGroup[];
   item_count: number;
   total_qty: number;
   subtotal: number;
@@ -728,6 +780,18 @@ export interface ShippingRate {
   etd: string;
 }
 
+/** Ongkir untuk SATU toko. Tiap toko dikirim dari alamat berbeda, jadi
+ *  tarifnya dihitung sendiri dan customer memilih kurir per toko. */
+export interface ShippingRateGroup {
+  location: "home" | "store";
+  store_name: string;
+  total_weight_grams: number;
+  subtotal: number;
+  rates: ShippingRate[];
+  /** Diisi kalau toko INI gagal dihitung ongkirnya. Toko lain tetap bisa. */
+  error?: string;
+}
+
 export interface ShippingRatesResponse {
   address: {
     label: string;
@@ -736,14 +800,31 @@ export interface ShippingRatesResponse {
     province: string;
   };
   total_weight_grams: number;
-  rates: ShippingRate[];
+  groups: ShippingRateGroup[];
+}
+
+export interface CheckoutOrderSummary {
+  order_id: string;
+  location: "home" | "store";
+  store_name: string;
+  subtotal: number;
+  shipping_cost: number;
+  voucher_code?: string;
+  voucher_discount?: number;
+  total: number;
 }
 
 export interface CheckoutResponse {
+  /** Pengikat semua pesanan dari satu kali checkout — satu pembayaran. */
+  checkout_group_id: string;
+  orders: CheckoutOrderSummary[];
+  /** Pesanan pertama; dipakai sebagai tujuan pengalihan setelah checkout. */
   order_id: string;
+  grand_total: number;
   subtotal: number;
   shipping_cost: number;
   total: number;
+  voucher_discount?: number;
   // PG DOKU (28 Jul 2026). URL yang customer buka untuk lakukan pembayaran
   // — VA number/QR code/e-wallet redirect page ditentukan channel.
   payment_url?: string;
@@ -798,23 +879,31 @@ export const checkoutApi = {
     }, "customer"),
   createOrder: (data: {
     address_id: string;
-    // CODE Biteship (mis. "sicepat"/"reg") — dipakai BE untuk Create Order API
-    shipping_courier: string;
-    shipping_service: string;
-    // Display name (mis. "SiCepat"/"Reguler") — untuk render di UI
-    shipping_courier_name?: string;
-    shipping_service_name?: string;
-    shipping_cost: number;
-    shipping_etd: string;
+    /** Satu entri per toko yang ada barangnya di keranjang. */
+    groups: {
+      location: "home" | "store";
+      // CODE Biteship (mis. "sicepat"/"reg") — dipakai BE untuk Create Order API
+      shipping_courier: string;
+      shipping_service: string;
+      // Display name (mis. "SiCepat"/"Reguler") — untuk render di UI
+      shipping_courier_name?: string;
+      shipping_service_name?: string;
+      shipping_cost: number;
+      shipping_etd: string;
+      /** Voucher TOKO INI. Voucher toko lain ditolak backend. */
+      voucher_code?: string;
+    }[];
     notes?: string;
-    voucher_code?: string;
-    payment_channel: string;             // bca/qris/ovo/dst
+    payment_channel?: string;            // bca/qris/ovo/dst
     payment_channel_category?: string;   // audit: virtual-account/qris/e-wallet/credit-card
     selected_item_ids?: string[];
     buy_now_items?: { product_id: string; quantity: number }[];
   }) => request<CheckoutResponse>("POST", "/ecom/checkout/create-order", data, "customer"),
-  validateVoucher: (code: string) =>
-    request<VoucherValidateResponse>("POST", "/ecom/checkout/validate-voucher", { code }, "customer"),
+  /** `location` menentukan toko mana yang diperiksa: minimum belanjanya
+   *  dihitung dari subtotal toko itu saja. */
+  validateVoucher: (code: string, location: string, selectedItemIds?: string[]) =>
+    request<VoucherValidateResponse>("POST", "/ecom/checkout/validate-voucher",
+      { code, location, selected_item_ids: selectedItemIds }, "customer"),
 };
 
 // ─── Customer Orders API (Fase 3e) ──────────────────────────────────
@@ -826,6 +915,9 @@ export interface CustomerOrderListItem {
   first_item: string;
   created_at: string;
   payment_paid_at?: string;
+  /** Terisi kalau pesanan ini satu pembayaran dengan pesanan lain. */
+  checkout_group_id?: string;
+  store_name?: string;
 }
 
 export interface CustomerOrderDetail {
@@ -840,6 +932,18 @@ export interface CustomerOrderDetail {
   created_at: string;
   /** URL bukti transfer yang sudah di-upload customer. Kosong = belum. */
   payment_proof?: string;
+  /** Satu checkout bisa menghasilkan beberapa pesanan (keranjang dua toko)
+   *  yang dibayar SEKALI. Terisi hanya kalau grupnya lebih dari satu. */
+  checkout_group_id?: string;
+  group_orders?: {
+    order_id: string;
+    store_name: string;
+    total: number;
+    status?: string;
+    is_self: boolean;
+  }[];
+  /** Jumlah yang harus ditransfer — mencakup semua pesanan dalam grup. */
+  group_total?: number;
   items: {
     product_id: string;
     name: string;
@@ -979,6 +1083,12 @@ export interface EcomRefundResponse {
 
 // Sprint 4 Chunk 5 — Ecom settings type (singleton, id='default').
 export interface EcomSettings {
+  /** Tempat yang pengaturannya ini: "home" | "store". */
+  location?: string;
+  /** Toko ini tayang di storefront publik atau belum. Jangan dinyalakan
+   *  sebelum alamat jemputnya terisi — ongkir dihitung dari titik asal, dan
+   *  kalau kosong titik itu jatuh ke alamat toko satunya. */
+  storefront_enabled?: boolean;
   id: string;
   min_order_amount: number;
   wa_contact_number: string;
@@ -990,6 +1100,8 @@ export interface EcomSettings {
   store_name: string;
   /** URL logo toko. Kosong = pakai logo bawaan yang digambar di kode. */
   store_logo?: string | null;
+  /** Nama palet warna merek. Kosong = merah muda bawaan. */
+  brand_color?: string | null;
   store_email?: string;
   store_pickup_address?: string;
   store_pickup_phone?: string;

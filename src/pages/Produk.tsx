@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag, Check, TrendingDown, Bell, BellOff } from "lucide-react";
+import { ArrowLeft, Package, Minus, Plus, ShoppingBag, AlertCircle, Tag, Check, TrendingDown, Bell, BellOff, Store, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
 import { publicApi, formatRp, type EcomProductDetail, type EcomProductListItem } from "@/lib/api";
 import { addToCart } from "@/lib/cartStore";
@@ -215,6 +215,23 @@ export function Produk() {
             {product.name_id}
           </h1>
           <p className="text-xs text-ink-500">SKU: {product.sku}</p>
+
+          {/* Dikirim dari mana — bukan hiasan. Jarak dari toko ke alamat
+              customer yang menentukan ongkir, dan barang dari dua toko
+              berarti dua paket dengan dua ongkir. Lebih baik diketahui di
+              sini daripada jadi kejutan di halaman checkout. */}
+          {product.store_name && (
+            <Link
+              to={`/toko/${product.location}`}
+              className="inline-flex items-center gap-1.5 text-xs text-ink-700 bg-cherry-50 border border-cherry-100 rounded-lg px-2.5 py-1.5 self-start hover:border-cherry-300"
+            >
+              <Store size={13} className="text-cherry-500 shrink-0" aria-hidden="true" />
+              <span>
+                Dikirim dari <b className="text-ink-900">{product.store_name}</b>
+              </span>
+              <ChevronRight size={12} className="text-ink-500 shrink-0" aria-hidden="true" />
+            </Link>
+          )}
 
           {/* Price */}
           <div className="mt-2">

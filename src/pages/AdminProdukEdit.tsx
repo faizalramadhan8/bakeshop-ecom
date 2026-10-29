@@ -775,24 +775,70 @@ function SesuaikanStok({
 // dan backend memaksanya juga. Tidak ditampilkan sebagai pilihan supaya
 // tidak ada yang perlu diputuskan tanpa guna.
 
-const DURASI = [
-  { v: 0, label: "Tidak terbatas" },
-  { v: 1, label: "1 hari" },
-  { v: 3, label: "3 hari" },
-  { v: 6, label: "6 hari" },
-  { v: 12, label: "12 hari" },
-  { v: 30, label: "30 hari" },
-];
-
 function rp(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
 }
 
-function sisaHari(iso?: string | null): number | null {
-  if (!iso) return null;
+// ── Periode berlaku tier ──────────────────────────────────────────────────
+//
+// Bu Santi 30 Okt 2026: "Ada periode tanggal dan bulan. Jadi saya bisa buat
+// promo dalam bulan mendatang." Pilihan durasi yang lama (1/3/6/12/30 hari)
+// selalu mulai detik itu juga, jadi promo Desember hanya bisa dipasang pada
+// 1 Desember — tepat saat tokonya paling sibuk.
+
+function fmtTgl(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function tglMulaiInput(iso?: string | null): string {
+  if (!iso) return "";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return Math.ceil((d.getTime() - Date.now()) / 86400000);
+  return Number.isNaN(d.getTime()) ? "" : fmtTgl(d);
+}
+
+/**
+ * Backend menyimpan batas akhir secara eksklusif — tanggal yang diketik admin
+ * jadi 00:00 hari BERIKUTNYA supaya hari terakhir terhitung penuh. Untuk
+ * ditampilkan lagi harus dimundurkan sehari. Tier lama yang dibuat lewat
+ * pilihan durasi punya jam sembarang; itu ditampilkan apa adanya.
+ */
+function tglSampaiInput(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0) {
+    d.setDate(d.getDate() - 1);
+  }
+  return fmtTgl(d);
+}
+
+function pintasanPeriode() {
+  const now = new Date();
+  return [
+    { label: "Berlaku terus", mulai: "", sampai: "" },
+    { label: "7 hari", mulai: fmtTgl(now), sampai: fmtTgl(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 6)) },
+    { label: "Sisa bulan ini", mulai: fmtTgl(now), sampai: fmtTgl(new Date(now.getFullYear(), now.getMonth() + 1, 0)) },
+    { label: "Bulan depan", mulai: fmtTgl(new Date(now.getFullYear(), now.getMonth() + 1, 1)), sampai: fmtTgl(new Date(now.getFullYear(), now.getMonth() + 2, 0)) },
+  ];
+}
+
+/** Status jadwal untuk label di daftar. */
+function statusJadwal(t: { starts_at?: string | null; expires_at?: string | null }):
+  { kind: "aktif" | "terjadwal" | "berakhir"; hariLagi: number } | null {
+  const now = Date.now();
+  if (t.starts_at) {
+    const mulai = new Date(t.starts_at).getTime();
+    if (!Number.isNaN(mulai) && mulai > now) {
+      return { kind: "terjadwal", hariLagi: Math.ceil((mulai - now) / 86400000) };
+    }
+  }
+  if (t.expires_at) {
+    const habis = new Date(t.expires_at).getTime();
+    if (Number.isNaN(habis)) return null;
+    if (habis <= now) return { kind: "berakhir", hariLagi: 0 };
+    return { kind: "aktif", hariLagi: Math.ceil((habis - now) / 86400000) };
+  }
+  return null;
 }
 
 function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNormal: number }) {
@@ -802,7 +848,8 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
   const [buka, setBuka] = useState(false);
   const [qty, setQty] = useState("");
   const [total, setTotal] = useState("");
-  const [durasi, setDurasi] = useState(0);
+  const [mulai, setMulai] = useState("");
+  const [sampai, setSampai] = useState("");
   const [catatan, setCatatan] = useState("");
   const [simpan, setSimpan] = useState(false);
   const [salah, setSalah] = useState<string | null>(null);
@@ -819,7 +866,7 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
 
   const tutup = () => {
     setBuka(false); setEditId(null); setQty(""); setTotal("");
-    setDurasi(0); setCatatan(""); setSalah(null);
+    setMulai(""); setSampai(""); setCatatan(""); setSalah(null);
   };
 
   const mulaiEdit = (t: EcomPriceTier) => {
@@ -828,10 +875,11 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
     // Dikalikan balik ke total paket — tersimpan per satuan, diketik per paket.
     setTotal(String(Math.round(t.price * t.min_qty)));
     setCatatan(t.note || "");
-    // Durasi sengaja tidak dimuat ulang: backend menyimpan tanggal kedaluwarsa,
-    // bukan durasinya. Dibiarkan "Tidak terbatas" supaya admin memilih ulang
-    // kalau memang mau diperpanjang — menebak durasi dari tanggal akan salah.
-    setDurasi(0);
+    // Tanggalnya sekarang ikut dimuat. Dulu tidak bisa karena layarnya
+    // menanyakan durasi sementara backend menyimpan tanggal — akibatnya
+    // menyimpan perubahan apa pun diam-diam menghapus masa berlakunya.
+    setMulai(tglMulaiInput(t.starts_at));
+    setSampai(tglSampaiInput(t.expires_at));
     setSalah(null);
     setBuka(true);
   };
@@ -851,6 +899,9 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
       setSalah(`Harga per satuan (${rp(Math.round(perSatuan))}) tidak lebih murah dari harga normal (${rp(hargaNormal)}). Grosir seharusnya lebih murah.`);
       return;
     }
+    if (mulai && sampai && sampai < mulai) {
+      setSalah("Tanggal selesai tidak boleh sebelum tanggal mulai."); return;
+    }
     setSalah(null);
     setSimpan(true);
     try {
@@ -859,7 +910,11 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
         price: tot / q,
         target_type: "all_customers" as const,
         note: catatan.trim(),
-        duration_days: durasi || undefined,
+        // Dikirim selalu, termasuk saat kosong — string kosong berarti
+        // "hapus batasnya". Kalau field-nya dihilangkan, backend menganggap
+        // tidak ada perubahan dan jadwal lama menempel terus.
+        starts_at: mulai,
+        expires_at: sampai,
       };
       if (editId) await adminApi.updateTier(productId, editId, payload);
       else await adminApi.createTier(productId, payload);
@@ -912,8 +967,7 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
       ) : (
         <div className="space-y-2">
           {tiers.map((t) => {
-            const sisa = sisaHari(t.expires_at);
-            const kadaluarsa = sisa !== null && sisa <= 0;
+            const jadwal = statusJadwal(t);
             return (
               <div key={t.id} className="rounded-xl border border-cherry-100 p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -923,9 +977,20 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
                       <span className="text-ink-500 font-normal text-xs"> ({rp(Math.round(t.price))}/satuan)</span>
                     </p>
                     {t.note && <p className="text-xs text-ink-500 mt-0.5">{t.note}</p>}
-                    {sisa !== null && (
-                      <p className={`text-xs font-bold mt-1 ${kadaluarsa ? "text-red-600" : "text-amber-700"}`}>
-                        {kadaluarsa ? "Sudah kedaluwarsa — tidak berlaku lagi" : `Sisa ${sisa} hari`}
+                    {jadwal && (
+                      <p className={`text-xs font-bold mt-1 ${
+                        jadwal.kind === "berakhir" ? "text-red-600"
+                          : jadwal.kind === "terjadwal" ? "text-cherry-600"
+                          : "text-amber-700"
+                      }`}>
+                        {jadwal.kind === "berakhir"
+                          ? "Sudah berakhir — tidak berlaku lagi"
+                          : jadwal.kind === "terjadwal"
+                          // Promo terjadwal terlihat persis seperti promo yang
+                          // tidak jalan. Tanpa label ini mudah dikira rusak
+                          // lalu dipasang dua kali.
+                          ? `Belum berlaku — mulai ${jadwal.hariLagi} hari lagi`
+                          : `Sisa ${jadwal.hariLagi} hari`}
                       </p>
                     )}
                   </div>
@@ -990,16 +1055,46 @@ function HargaGrosir({ productId, hargaNormal }: { productId: string; hargaNorma
           )}
 
           <div>
-            <label className="text-xs font-bold text-ink-700 block mb-1.5">Berlaku sampai</label>
-            <select value={durasi} onChange={(e) => setDurasi(Number(e.target.value))} className={inp}>
-              {DURASI.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}
-            </select>
-            {editId && (
-              <p className="text-xs text-ink-500 mt-1 leading-relaxed">
-                Pilih ulang kalau mau diperpanjang. Dibiarkan &quot;Tidak terbatas&quot; akan
-                menghapus batas waktunya.
-              </p>
-            )}
+            <label className="text-xs font-bold text-ink-700 block mb-1.5">Periode berlaku</label>
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {pintasanPeriode().map((p) => {
+                const aktif = mulai === p.mulai && sampai === p.sampai;
+                return (
+                  <button key={p.label} type="button"
+                    onClick={() => { setMulai(p.mulai); setSampai(p.sampai); }}
+                    className={`min-h-11 px-3 rounded-xl border text-xs font-bold ${
+                      aktif ? "bg-cherry-500 text-white border-cherry-500" : "border-cherry-200 text-ink-700"
+                    }`}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-xs text-ink-500 block mb-1">Mulai</span>
+                <input type="date" value={mulai} onChange={(e) => setMulai(e.target.value)} className={inp} />
+              </div>
+              <div>
+                <span className="text-xs text-ink-500 block mb-1">Sampai</span>
+                <input type="date" value={sampai} min={mulai || undefined}
+                  onChange={(e) => setSampai(e.target.value)} className={inp} />
+              </div>
+            </div>
+            <p className="text-xs text-ink-500 mt-1 leading-relaxed">
+              {(() => {
+                const hariIni = fmtTgl(new Date());
+                const tgl = (v: string) => new Date(v + "T00:00:00")
+                  .toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+                if (mulai && mulai > hariIni) {
+                  return sampai
+                    ? `Belum berlaku. Harga ini aktif ${tgl(mulai)} sampai ${tgl(sampai)}.`
+                    : `Belum berlaku. Harga ini mulai aktif ${tgl(mulai)}.`;
+                }
+                if (sampai) return `Berlaku sampai habis ${tgl(sampai)}, lalu balik ke harga normal.`;
+                return "Kosongkan keduanya kalau harga ini berlaku terus.";
+              })()}
+            </p>
           </div>
 
           <div>

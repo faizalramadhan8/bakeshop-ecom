@@ -39,6 +39,9 @@ export function AdminVoucher() {
   const [startsAt, setStartsAt] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [isActive, setIsActive] = useState(true);
+  // Toko pemilik voucher. Bu Santi 30 Okt 2026: "jangan sampai yang kepotong
+  // malah toko lain" — jadi tiap kode milik satu toko, tanpa pilihan "semua".
+  const [location, setLocation] = useState<"home" | "store">("home");
 
   useEffect(() => {
     const claims = decodeToken();
@@ -62,7 +65,7 @@ export function AdminVoucher() {
     setEditingId(null);
     setCode(""); setDescription(""); setType("percent"); setValue("");
     setMinSubtotal("0"); setMaxDiscount(""); setUsageLimit("0");
-    setStartsAt(""); setExpiresAt(""); setIsActive(true);
+    setStartsAt(""); setExpiresAt(""); setIsActive(true); setLocation("home");
   };
 
   const openCreate = () => { resetForm(); setShowForm(true); };
@@ -78,6 +81,7 @@ export function AdminVoucher() {
     setStartsAt(isoToDateInput(v.starts_at));
     setExpiresAt(isoToDateInput(v.expires_at));
     setIsActive(v.is_active);
+    setLocation(v.location === "store" ? "store" : "home");
     setShowForm(true);
   };
 
@@ -88,6 +92,7 @@ export function AdminVoucher() {
     try {
       const payload = {
         code: code.trim().toUpperCase(),
+        location,
         description: description.trim(),
         type,
         value: Number(value),
@@ -159,6 +164,32 @@ export function AdminVoucher() {
                   placeholder="DISKONHEMAT10"
                   className="px-4 py-3 rounded-xl border border-cherry-200 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-cherry-500/30 focus:border-cherry-400"
                 />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <label className="text-xs font-bold text-ink-700 uppercase tracking-wider">Berlaku di toko *</label>
+                <div className="flex gap-2">
+                  {([
+                    { v: "home" as const, label: "Online Rumah" },
+                    { v: "store" as const, label: "Toko Bekasi" },
+                  ]).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => setLocation(o.v)}
+                      className={`flex-1 min-h-11 px-3 rounded-xl border text-sm font-bold ${
+                        location === o.v
+                          ? "bg-cherry-500 text-white border-cherry-500"
+                          : "border-cherry-200 text-ink-700"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-ink-500 leading-relaxed">
+                  Potongannya hanya mengurangi tagihan toko ini. Di keranjang
+                  yang berisi dua toko, tagihan toko lain tidak ikut berkurang.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <label className="text-xs font-bold text-ink-700 uppercase tracking-wider">Deskripsi (opsional)</label>
@@ -344,6 +375,12 @@ export function AdminVoucher() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-sm font-black text-ink-900">{v.code}</span>
+                      {/* Toko pemiliknya — tanpa ini dua voucher dengan
+                          angka yang sama terlihat identik, padahal yang satu
+                          tidak pernah berlaku di toko satunya. */}
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-ink-100 text-ink-700">
+                        {v.location === "store" ? "Toko Bekasi" : "Online Rumah"}
+                      </span>
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-cherry-100 text-cherry-600">
                         {v.type === "percent"
                           ? `${v.value}%${v.max_discount ? ` (max ${formatRp(v.max_discount)})` : ""}`

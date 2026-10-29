@@ -5,6 +5,7 @@
 // Cache 5min di sessionStorage — jarang berubah, tidak perlu real-time.
 
 import { useEffect, useState } from "react";
+import { pasangBrand } from "./brandTheme";
 import { request } from "./api";
 
 export interface PublicSettings {
@@ -16,6 +17,12 @@ export interface PublicSettings {
   announcement_bar_cta_label?: string;
   announcement_bar_cta_url?: string;
   store_name: string;
+  /** Tempat yang pengaturannya dikembalikan: "home" | "store". */
+  location?: string;
+  /** Alamat & kontak jemput — ditampilkan di halaman toko supaya customer
+   *  tahu barangnya dikirim dari mana. */
+  store_pickup_address?: string | null;
+  store_pickup_phone?: string | null;
   payment_pg_enabled: boolean;
   payment_manual_enabled: boolean;
   /** Rekening tujuan transfer manual, dari Pengaturan POS. Kosong = Bu Santi
@@ -24,6 +31,8 @@ export interface PublicSettings {
   bank_accounts?: { bank_name: string; account_number: string; account_holder: string }[];
   /** URL logo toko. Kosong = pakai logo bawaan yang digambar di kode. */
   store_logo?: string | null;
+  /** Nama palet warna merek. Kosong = merah muda bawaan. */
+  brand_color?: string | null;
   // Sprint 5 Chunk 7 — Homepage CMS
   hero_kicker?: string;
   hero_title?: string;
@@ -105,12 +114,78 @@ export function usePublicSettings(wajibAdaRekening = false): PublicSettings {
         if (cancelled || !res) return;
         writeCache(res);
         setData(res);
+        // Warnanya ikut diperbarui di sini, bukan cuma saat halaman dimuat —
+        // kalau Bu Santi menggantinya, pengunjung yang sedang membuka toko
+        // melihatnya berubah begitu cache lima menitnya habis.
+        pasangBrand(res.brand_color);
       })
       .catch(() => {
         // silent — pakai default. Cegah console spam ke customer.
       });
     return () => { cancelled = true; };
   }, [wajibAdaRekening]);
+
+  return data;
+}
+
+
+// ─── Pengaturan per toko ──────────────────────────────────────────────
+//
+// Terpisah dari usePublicSettings. Yang itu adalah identitas STOREFRONT
+// (logo, warna merek, nomor WA) dan harus tetap sama ke mana pun customer
+// berpindah — kalau ikut berganti saat membuka produk toko lain, halamannya
+// terlihat seperti pindah situs.
+//
+// Yang ini identitas SATU TOKO: namanya, alamat jemputnya, kontaknya. Dipakai
+// baris "Dikirim dari …" di halaman produk dan di halaman toko.
+
+const TOKO_CACHE_PREFIX = "bakeshop-store-settings:";
+
+function bacaCacheToko(loc: string): PublicSettings | null {
+  try {
+    const raw = sessionStorage.getItem(TOKO_CACHE_PREFIX + loc);
+    if (!raw) return null;
+    const entry: CacheEntry = JSON.parse(raw);
+    if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) return null;
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
+
+export function useStoreSettings(location?: string | null): PublicSettings | null {
+  const loc = (location || "").trim();
+  const [data, setData] = useState<PublicSettings | null>(() => (loc ? bacaCacheToko(loc) : null));
+
+  useEffect(() => {
+    if (!loc) {
+      setData(null);
+      return;
+    }
+    const cached = bacaCacheToko(loc);
+    if (cached) {
+      setData(cached);
+      return;
+    }
+    let cancelled = false;
+    request<PublicSettings>("GET", `/ecom/settings?location=${encodeURIComponent(loc)}`)
+      .then((res) => {
+        if (cancelled || !res) return;
+        try {
+          sessionStorage.setItem(TOKO_CACHE_PREFIX + loc,
+            JSON.stringify({ data: res, fetchedAt: Date.now() } as CacheEntry));
+        } catch {
+          // sessionStorage penuh/diblokir — tidak apa-apa, cuma tanpa cache.
+        }
+        setData(res);
+      })
+      .catch(() => {
+        // Diam saja. Nama toko sudah dikirim bersama produknya, jadi
+        // kegagalan di sini hanya menghilangkan alamat jemput — bukan
+        // alasan untuk menampilkan pesan error ke customer.
+      });
+    return () => { cancelled = true; };
+  }, [loc]);
 
   return data;
 }

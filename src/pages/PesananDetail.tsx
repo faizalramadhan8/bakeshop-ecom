@@ -42,6 +42,12 @@ function TransferManual({
   const accounts = settings.bank_accounts ?? [];
   const waNumber = settings.wa_contact_number?.trim();
 
+  // Keranjang dua toko = dua pesanan, SATU transfer. Nominal yang harus
+  // dikirim adalah jumlah keduanya; menampilkan total satu pesanan saja
+  // membuat customer mentransfer kurang, lalu pesanannya tertahan.
+  const grup = order.group_orders ?? [];
+  const nominalTransfer = grup.length > 1 ? (order.group_total ?? order.total) : order.total;
+
   // Tombolnya ikon saja, jadi keberhasilannya harus kelihatan di tombol itu
   // sendiri — ikon berganti centang sebentar, bukan cuma toast yang gampang
   // kelewat saat mata customer sudah pindah ke aplikasi m-banking.
@@ -100,8 +106,27 @@ function TransferManual({
       {accounts.length > 0 ? (
         <div>
           <p className="text-sm font-bold text-ink-900 mb-2">
-            Transfer {formatRp(order.total)} ke salah satu rekening berikut
+            Transfer {formatRp(nominalTransfer)} ke salah satu rekening berikut
           </p>
+          {grup.length > 1 && (
+            <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p className="text-xs text-amber-900 leading-relaxed">
+                Pesanan ini dibuat bersama {grup.length - 1} pesanan lain dari toko berbeda.
+                <b> Cukup satu kali transfer</b> sebesar {formatRp(nominalTransfer)} untuk semuanya.
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {grup.map((g) => (
+                  <li key={g.order_id} className="text-xs text-amber-900 flex justify-between gap-2">
+                    <span className="truncate">
+                      {g.store_name}
+                      {g.is_self && <span className="text-amber-700"> (pesanan ini)</span>}
+                    </span>
+                    <span className="tabular-nums shrink-0">{formatRp(g.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ul className="space-y-2">
             {accounts.map((a, i) => (
               <li key={i} className="rounded-xl border border-cherry-200 bg-white p-3">
@@ -211,7 +236,7 @@ function TransferManual({
             className="w-full max-w-[220px] rounded-lg border border-cherry-100"
           />
           <p className="text-xs text-ink-500 mt-1.5 leading-snug">
-            Pastikan nominal <b className="text-ink-900">{formatRp(order.total)}</b> dan
+            Pastikan nominal <b className="text-ink-900">{formatRp(nominalTransfer)}</b> dan
             tanggalnya terbaca jelas.
           </p>
           <div className="mt-3 flex gap-2">

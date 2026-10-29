@@ -10,6 +10,7 @@ import {
 import toast from "react-hot-toast";
 import { adminApi, decodeToken, formatRp, type EcomAdminAnalytics } from "@/lib/api";
 import { AdminShell } from "@/components/AdminShell";
+import { PilihTempat, type Tempat } from "@/components/PilihTempat";
 import { SkeletonStat } from "@/components/Skeleton";
 
 const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
@@ -17,7 +18,7 @@ const ECOM_ADMIN_ROLES = ["ecom_admin", "ecom_superadmin", "superadmin"];
 // Funnel steps sesuai lifecycle order (drop-off visible urutan ini).
 const FUNNEL_STEPS: Array<{ key: string; label: string; color: string }> = [
   { key: "pending_payment", label: "Menunggu Bayar", color: "#F59E0B" },
-  { key: "paid",            label: "Sudah Bayar",    color: "#E11D48" },
+  { key: "paid",            label: "Sudah Bayar",    color: "var(--color-cherry-500)" },
   { key: "processing",      label: "Diproses",       color: "#8B5CF6" },
   { key: "shipped",         label: "Dikirim",        color: "#3B82F6" },
   { key: "delivered",       label: "Sampai",         color: "#10B981" },
@@ -33,7 +34,10 @@ const CHANNEL_LABELS: Record<string, string> = {
   ewallet: "E-Wallet",
 };
 
-const CHANNEL_COLORS = ["#E11D48", "#F59E0B", "#8B5CF6", "#3B82F6", "#10B981", "#EC4899"];
+// Warna pertama ikut warna merek; sisanya sengaja tetap — ini pembeda
+// antar kanal pembayaran, bukan hiasan, jadi harus tetap bisa dibedakan
+// berapa pun warna mereknya.
+const CHANNEL_COLORS = ["var(--color-cherry-500)", "#F59E0B", "#8B5CF6", "#3B82F6", "#10B981", "#EC4899"];
 
 function fmtShortDate(iso: string): string {
   const d = new Date(iso);
@@ -50,13 +54,15 @@ export function AdminAnalytics() {
 
   const [data, setData] = useState<EcomAdminAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tempat, setTempat] = useState<Tempat>("");
 
   useEffect(() => {
-    adminApi.getAnalytics()
+    setLoading(true);
+    adminApi.getAnalytics(tempat || undefined)
       .then(setData)
       .catch((err) => toast.error(err instanceof Error ? err.message : "Gagal load"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [tempat]);
 
   return (
     <AdminShell
@@ -64,6 +70,11 @@ export function AdminAnalytics() {
       subtitle="Ringkasan performa storefront 30 hari terakhir — trend, funnel, dan channel."
     >
       <div className="flex flex-col gap-4">
+        {/* Pemilih tempat selalu tampil — angka gabungan dua toko dan angka
+            satu toko terlihat sama persis tanpa penandanya. */}
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <PilihTempat value={tempat} onChange={setTempat} />
+        </div>
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {Array.from({ length: 4 }, (_, i) => <SkeletonStat key={i} />)}
@@ -237,7 +248,7 @@ function DailyRevenueChart({ buckets }: { buckets: EcomAdminAnalytics["daily_rev
         {/* Gridlines */}
         {gridLines.map((g, i) => (
           <g key={i}>
-            <line x1={padL} y1={g.y} x2={W - padR} y2={g.y} stroke="#FFE4E9" strokeWidth={1} />
+            <line x1={padL} y1={g.y} x2={W - padR} y2={g.y} stroke="var(--color-cherry-100)" strokeWidth={1} />
             <text x={padL - 4} y={g.y + 3} fontSize={9} fill="#8B6A73" textAnchor="end">{g.label}</text>
           </g>
         ))}
@@ -266,8 +277,8 @@ function DailyRevenueChart({ buckets }: { buckets: EcomAdminAnalytics["daily_rev
         ))}
         <defs>
           <linearGradient id="barGrad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#E11D48" />
-            <stop offset="100%" stopColor="#FB7185" />
+            <stop offset="0%" stopColor="var(--color-cherry-500)" />
+            <stop offset="100%" stopColor="var(--color-cherry-400)" />
           </linearGradient>
         </defs>
       </svg>

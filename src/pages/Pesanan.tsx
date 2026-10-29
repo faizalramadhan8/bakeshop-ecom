@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Receipt, Package, ChevronRight } from "lucide-react";
+import { Receipt, Package, ChevronRight, Store } from "lucide-react";
 import { ordersApi, formatRp, type CustomerOrderListItem } from "@/lib/api";
 import { useUrlQueryState } from "@/lib/useUrlQueryState";
 import { SkeletonList } from "@/components/Skeleton";
@@ -165,6 +165,24 @@ export function Pesanan() {
                       {formatDateShort(o.created_at)}
                     </span>
                   </div>
+                  {/* Toko asal + penanda satu transfer. Keranjang dua toko
+                      menghasilkan dua baris di daftar ini; tanpa penandanya
+                      customer mengira dia ditagih dua kali. */}
+                  {(o.store_name || o.checkout_group_id) && (
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      {o.store_name && (
+                        <span className="text-[11px] text-ink-500 inline-flex items-center gap-1">
+                          <Store size={11} aria-hidden="true" />
+                          {o.store_name}
+                        </span>
+                      )}
+                      {o.checkout_group_id && (
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                          1 transfer bersama
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <p className="text-sm font-bold text-ink-900 truncate">
                     {o.first_item}
                     {o.item_count > 1 && (
