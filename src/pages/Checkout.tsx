@@ -7,9 +7,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
-  addressApi, checkoutApi, formatRp, formatETD, pgChannelsApi, publicApi,
+  addressApi, checkoutApi, formatRp, formatETD, publicApi,
   type Address, type ShippingRate, type ShippingRatesResponse,
-  type PGChannel, type PGChannelGroup, type PGChannelCategory,
   type EcomProductDetail,
 } from "@/lib/api";
 import { usePublicSettings } from "@/lib/publicSettings";
@@ -20,19 +19,6 @@ import { trackEvent } from "@/lib/analytics";
 type CheckoutContext =
   | { mode: "cart"; selected_item_ids?: string[] }
   | { mode: "buy_now"; buy_now_items: { product_id: string; quantity: number }[] };
-
-// Label Indonesia untuk PG category header — biar Bu Santi ngerti (bukan
-// "virtual-account" yang tehnis).
-const CATEGORY_LABEL: Record<PGChannelCategory, string> = {
-  "virtual-account": "Virtual Account (Transfer Bank)",
-  "qris": "QRIS",
-  "e-wallet": "E-Wallet",
-  "credit-card": "Kartu Kredit",
-};
-
-// Ordering — VA di atas (paling common Indonesia), QRIS + e-wallet next
-// (skala Bu Santi customer digital-native), credit card terakhir (rare).
-const CATEGORY_ORDER: PGChannelCategory[] = ["virtual-account", "qris", "e-wallet", "credit-card"];
 
 // Grouped shipping rates by carrier — untuk UX dropdown.
 // Kalau ada JNE Reguler + JNE YES, jadi 1 grup JNE dengan 2 sub-option.
@@ -97,7 +83,6 @@ export function Checkout() {
   // Berisi `location` toko yang sheet-nya sedang dibuka, bukan boolean —
   // ada satu pemilih kurir per toko.
   const [shippingSheetFor, setShippingSheetFor] = useState<string | null>(null);
-  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
 
   // Buy-now: fetch produk detail supaya bisa tampil nama + harga + subtotal
   // real (bukan placeholder "—"). Cart mode ambil dari useCart, tidak perlu
@@ -113,63 +98,13 @@ export function Checkout() {
     });
   }, [isBuyNow, ctx]);
 
-  // PG channels — di-fetch langsung dari alifworks (public endpoint). Grup
-  // by category (VA / QRIS / e-wallet / kartu kredit) sesuai preferensi
-  // Bu Santi. Loading state di-tampilkan di section pembayaran; kalau fetch
-  // gagal, section jadi disabled + tampil retry.
-  const [channelGroups, setChannelGroups] = useState<PGChannelGroup[]>([]);
-  const [loadingChannels, setLoadingChannels] = useState(false);
-  const [channelsError, setChannelsError] = useState<string | null>(null);
-  const [selectedChannel, setSelectedChannel] = useState<PGChannel | null>(null);
-
   const settings = usePublicSettings();
-  // `payment_pg_enabled` mati = Bu Santi memakai transfer manual. Dalam mode
-  // itu daftar kanal PG TIDAK boleh diambil sama sekali: endpoint-nya dipanggil
-  // langsung dari browser ke alifworks, dan saat PG tidak dipakai panggilan itu
-  // gagal lalu menampilkan "Failed to fetch" di tempat metode pembayaran —
-  // customer mengira toko rusak, padahal transfer manual memang tersedia.
+  // `payment_pg_enabled` mati = Bu Santi memakai transfer manual.
   //
   // Dibaca sebagai `!== false` supaya selama pengaturan belum termuat
-  // perilakunya sama seperti sebelumnya (PG aktif), bukan mendadak manual.
+  // perilakunya sama seperti sebelumnya (gateway aktif), bukan mendadak
+  // manual lalu berkedip.
   const pgEnabled = settings.payment_pg_enabled !== false;
-
-  const loadChannels = () => {
-    setLoadingChannels(true);
-    setChannelsError(null);
-    pgChannelsApi.list()
-      .then((groups) => {
-        // Sort groups sesuai CATEGORY_ORDER, filter category yang tidak
-        // dikenal (defensive kalau PG tambah kategori baru).
-        const known = groups.filter((g) => CATEGORY_ORDER.includes(g.category));
-        known.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
-        setChannelGroups(known);
-        // Auto-pick default paling populer di Indonesia — QRIS dulu (universal,
-        // bisa scan dari app mana aja), fallback e-wallet (DANA/OVO/ShopeePay),
-        // fallback VA, terakhir kartu kredit. Customer bisa ubah via sheet.
-        const preferOrder: PGChannelCategory[] = ["qris", "e-wallet", "virtual-account", "credit-card"];
-        for (const cat of preferOrder) {
-          const g = known.find((x) => x.category === cat);
-          if (g && g.channels.length > 0) {
-            setSelectedChannel(g.channels[0]);
-            break;
-          }
-        }
-      })
-      .catch((err) => setChannelsError(err instanceof Error ? err.message : "Gagal memuat metode pembayaran"))
-      .finally(() => setLoadingChannels(false));
-  };
-
-  useEffect(() => {
-    if (!pgEnabled) {
-      // Bersihkan sisa state kalau saklarnya berubah saat halaman terbuka.
-      setChannelsError(null);
-      setChannelGroups([]);
-      setSelectedChannel(null);
-      return;
-    }
-    loadChannels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pgEnabled]);
 
   useEffect(() => {
     if (!isBuyNow) refreshCart();
@@ -356,17 +291,6 @@ export function Checkout() {
         : "Pilih metode pengiriman");
       return;
     }
-    // Hanya wajib di mode payment gateway. Saat transfer manual tidak ada
-    // kanal untuk dipilih, jadi pemeriksaan ini akan selalu gagal dan
-    // pesanan TIDAK PERNAH bisa dibuat — tombolnya aktif, tapi setiap klik
-    // dijawab "Pilih metode pembayaran" tanpa ada yang bisa dipilih.
-    //
-    // Syarat yang sama sudah dipakai untuk menonaktifkan tombol; dua tempat
-    // ini harus selalu sejalan, kalau tidak tombolnya berbohong.
-    if (pgEnabled && !selectedChannel) {
-      toast.error("Pilih metode pembayaran");
-      return;
-    }
     setPlacing(true);
     try {
       const resp = await checkoutApi.createOrder({
@@ -387,10 +311,9 @@ export function Checkout() {
             voucher_code: appliedVouchers[g.location]?.code,
           };
         }),
-        // Kosong di mode transfer manual — backend memang tidak memakainya
-        // di jalur itu (lihat CreateOrder: channelSaved dikosongkan).
-        payment_channel: selectedChannel?.payment_code ?? "",
-        payment_channel_category: selectedChannel?.category ?? "",
+        // Kanal tidak dipilih di sini lagi: Midtrans Snap punya layar
+        // pemilih kanalnya sendiri, dan yang mengisi kolom ini nanti adalah
+        // webhook (dari `payment_type`). Backend mengabaikan dua field ini.
         selected_item_ids: selectedIds,
         buy_now_items: ctx.mode === "buy_now" ? ctx.buy_now_items : undefined,
       });
@@ -403,9 +326,9 @@ export function Checkout() {
         value: resp.grand_total ?? resp.total,
         shipping: resp.shipping_cost,
       });
-      // PG DOKU — redirect ke checkout link supaya customer bisa bayar VA/
-      // QRIS/e-wallet. Kalau stub / gagal PG, fallback ke pesanan detail
-      // dengan mode manual (Bu Santi verify bank transfer).
+      // Alihkan ke halaman Midtrans, tempat customer memilih kanal lalu
+      // membayar. Kalau stub atau Snap gagal, jatuh ke detail pesanan dengan
+      // mode manual (transfer bank, Bu Santi yang memverifikasi).
       if (resp.payment_mode === "pg" && resp.payment_url && !resp.payment_url.startsWith("stub-")) {
         window.location.href = resp.payment_url;
         return;
@@ -678,86 +601,40 @@ export function Checkout() {
         );
       })}
 
-      {/* Section 3 — Metode Pembayaran (card summary, tap untuk buka sheet) */}
+      {/* Section 3 — Metode Pembayaran.
+          Keterangan, bukan pilihan. Midtrans Snap punya layar pemilih
+          kanalnya sendiri (VA, QRIS, e-wallet, kartu), jadi memilih dua kali
+          hanya membuat customer bingung dan membuka peluang kanal yang
+          dipilih di sini berbeda dengan yang akhirnya dipakai di sana. */}
       <section className="bg-white border border-cherry-200 rounded-2xl p-4 mb-3">
-        <button
-          type="button"
-          onClick={() => pgEnabled && !loadingChannels && !channelsError && channelGroups.length > 0 && setPaymentSheetOpen(true)}
-          disabled={!pgEnabled || loadingChannels || !!channelsError || channelGroups.length === 0}
-          className="w-full flex items-start gap-3 text-left disabled:opacity-100 disabled:cursor-default"
-        >
-          <div className="flex items-center gap-2 shrink-0 pt-0.5">
-            <CreditCard size={16} className="text-cherry-500" aria-hidden="true" />
-          </div>
+        <div className="flex items-start gap-3">
+          <CreditCard size={16} className="text-cherry-500 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <h2 className="text-sm font-black text-ink-900">Metode Pembayaran</h2>
-              {pgEnabled && !loadingChannels && !channelsError && channelGroups.length > 0 && (
-                <span className="text-xs font-bold text-cherry-500 shrink-0 inline-flex items-center gap-0.5">
-                  {selectedChannel ? "Ubah" : "Lihat Semua"}
-                  <ChevronRight size={12} aria-hidden="true" />
-                </span>
-              )}
+            <h2 className="text-sm font-black text-ink-900 mb-2">Metode Pembayaran</h2>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
+                <Wallet size={16} className="text-cherry-500" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                {pgEnabled ? (
+                  <>
+                    <p className="text-sm font-black text-ink-900">Transfer bank, QRIS, atau e-wallet</p>
+                    <p className="text-xs text-ink-500 leading-snug">
+                      Pilih caranya di halaman pembayaran setelah pesanan dibuat.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-black text-ink-900">Transfer Bank</p>
+                    <p className="text-xs text-ink-500 leading-snug">
+                      Nomor rekening muncul setelah pesanan dibuat. Transfer lalu kirim buktinya.
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-            {!pgEnabled ? (
-              /* Transfer manual — satu-satunya metode saat PG dimatikan.
-                 Ditampilkan sebagai keterangan, bukan pilihan, karena memang
-                 tidak ada yang bisa dipilih. Rincian rekeningnya menyusul di
-                 halaman pesanan setelah "Buat Pesanan" ditekan — di sana
-                 nominalnya sudah pasti, termasuk ongkir. */
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-cherry-50 border border-cherry-100 flex items-center justify-center shrink-0">
-                  <Wallet size={16} className="text-cherry-500" aria-hidden="true" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black text-ink-900">Transfer Bank</p>
-                  <p className="text-xs text-ink-500 leading-snug">
-                    Nomor rekening muncul setelah pesanan dibuat. Transfer lalu kirim buktinya.
-                  </p>
-                </div>
-              </div>
-            ) : loadingChannels ? (
-              <div className="flex items-center gap-2 text-ink-500 text-sm">
-                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                Memuat metode pembayaran…
-              </div>
-            ) : channelsError ? (
-              <div className="text-sm">
-                <p className="text-cherry-600 font-bold mb-1">{channelsError}</p>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); loadChannels(); }}
-                  className="text-xs font-bold text-cherry-500 underline"
-                >
-                  Coba lagi
-                </button>
-              </div>
-            ) : channelGroups.length === 0 ? (
-              <p className="text-sm text-ink-500">Tidak ada metode pembayaran tersedia saat ini.</p>
-            ) : selectedChannel ? (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-white border border-cherry-100 flex items-center justify-center shrink-0 overflow-hidden">
-                  {selectedChannel.payment_logo ? (
-                    // eslint-disable-next-line jsx-a11y/alt-text
-                    <img src={selectedChannel.payment_logo} alt="" className="max-w-full max-h-full object-contain" loading="lazy" />
-                  ) : (
-                    <Wallet size={16} className="text-cherry-500" aria-hidden="true" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black text-ink-900 truncate">{selectedChannel.payment_name}</p>
-                  {selectedChannel.total_admin_fee > 0 ? (
-                    <p className="text-xs text-ink-500">Biaya admin {formatRp(selectedChannel.total_admin_fee)}</p>
-                  ) : (
-                    <p className="text-xs text-ink-500">{CATEGORY_LABEL[selectedChannel.category]}</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-ink-500">Tap untuk pilih cara bayar</p>
-            )}
           </div>
-        </button>
+        </div>
       </section>
 
       {/* Rincian Pembayaran */}
@@ -894,15 +771,13 @@ export function Checkout() {
             <p className="text-[11px] sm:text-xs text-ink-500 leading-tight">Total Pembayaran</p>
             {/* Tombol yang mati tanpa alasan membuat customer menekannya
                 berulang kali lalu menyerah. Jadi di tempat ini disebutkan apa
-                yang masih kurang — urutannya mengikuti urutan bagian di
-                halaman: alamat, kurir, baru metode pembayaran. */}
+                yang masih kurang, urutannya mengikuti urutan bagian di
+                halaman: alamat, lalu kurir. */}
             <p className="text-base sm:text-lg font-black text-cherry-500 leading-tight truncate">
               {!selectedAddress ? (
                 <span className="text-ink-500 text-sm font-normal">Pilih alamat dulu</span>
               ) : !semuaKurirDipilih ? (
                 <span className="text-ink-500 text-sm font-normal">Pilih kurir dulu</span>
-              ) : pgEnabled && !selectedChannel ? (
-                <span className="text-ink-500 text-sm font-normal">Pilih metode bayar</span>
               ) : (
                 formatRp(total)
               )}
@@ -910,12 +785,7 @@ export function Checkout() {
           </div>
           <button
             onClick={placeOrder}
-            /* Di mode PG, metode pembayaran WAJIB dipilih dulu. Sebelum ini
-               tombolnya tetap bisa ditekan walau kanal belum dipilih —
-               pesanan terbuat, lalu gagal di sisi PG dan jatuh ke manual
-               tanpa customer tahu apa yang terjadi. Di mode transfer manual
-               tidak ada yang perlu dipilih, jadi tidak ikut dihalangi. */
-            disabled={placing || !selectedAddress || !semuaKurirDipilih || (pgEnabled && !selectedChannel)}
+            disabled={placing || !selectedAddress || !semuaKurirDipilih}
             className="shrink-0 px-4 sm:px-6 py-3 rounded-xl text-white text-sm font-bold bg-gradient-to-r from-cherry-400 to-cherry-500 disabled:opacity-40 active:scale-[0.98]"
           >
             {placing ? (
@@ -949,18 +819,6 @@ export function Checkout() {
         />
       )}
 
-      {/* Bottom sheet — Metode Pembayaran */}
-      {paymentSheetOpen && (
-        <PaymentSheet
-          groups={channelGroups}
-          selected={selectedChannel}
-          onSelect={(c) => {
-            setSelectedChannel(c);
-            setPaymentSheetOpen(false);
-          }}
-          onClose={() => setPaymentSheetOpen(false)}
-        />
-      )}
     </div>
   );
 }
@@ -1120,86 +978,3 @@ function ShippingSheet({
   );
 }
 
-// ─── PaymentSheet ─────────────────────────────────────────────────────
-// Grup by category (VA / QRIS / E-Wallet / Kartu Kredit). Radio card per
-// channel dengan logo dari PG.
-
-function PaymentSheet({
-  groups,
-  selected,
-  onSelect,
-  onClose,
-}: {
-  groups: PGChannelGroup[];
-  selected: PGChannel | null;
-  onSelect: (c: PGChannel) => void;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm modal-fade-in" onClick={onClose} />
-      <div className="relative bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col modal-sheet-in">
-        {/* Header */}
-        <div className="px-5 sm:px-6 pt-5 pb-3 border-b border-cherry-100 flex items-center gap-3 shrink-0">
-          <h2 className="flex-1 text-base font-black text-ink-900">Metode Pembayaran</h2>
-          <button type="button" onClick={onClose} aria-label="Tutup" className="w-11 h-11 rounded-xl flex items-center justify-center text-ink-500 hover:bg-cherry-50">
-            <X size={16} aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Groups */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-5">
-          {groups.map((group) => (
-            <div key={group.category}>
-              <p className="text-xs font-black uppercase tracking-wider text-ink-500 mb-2">
-                {CATEGORY_LABEL[group.category]}
-              </p>
-              <div className="flex flex-col gap-2">
-                {group.channels.map((ch) => {
-                  const active = selected?.id === ch.id;
-                  return (
-                    <button
-                      key={ch.id}
-                      type="button"
-                      onClick={() => onSelect(ch)}
-                      aria-pressed={active}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border-2 text-left min-h-[64px] ${active ? "border-cherry-500 bg-cherry-50" : "border-cherry-100 bg-white hover:border-cherry-300"}`}
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-white border border-cherry-100 flex items-center justify-center shrink-0 overflow-hidden">
-                        {ch.payment_logo ? (
-                          // eslint-disable-next-line jsx-a11y/alt-text
-                          <img src={ch.payment_logo} alt="" className="max-w-full max-h-full object-contain" loading="lazy" />
-                        ) : (
-                          <Wallet size={16} className="text-cherry-500" aria-hidden="true" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-ink-900 truncate">{ch.payment_name}</p>
-                        {ch.total_admin_fee > 0 && (
-                          <p className="text-xs text-ink-500">Biaya admin {formatRp(ch.total_admin_fee)}</p>
-                        )}
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${active ? "border-cherry-500 bg-cherry-500" : "border-cherry-300 bg-white"}`} aria-hidden="true">
-                        {active && <Check size={12} className="text-white" strokeWidth={3} />}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -504,8 +504,8 @@ export function AdminEcomSettings() {
         {/* Section: Payment Methods */}
         <Section icon={<CreditCard size={16} />} title="Metode Pembayaran" desc="Toggle channel yang tersedia untuk customer di checkout.">
           <ToggleRow
-            label="Payment Gateway DOKU"
-            desc="VA, QRIS, e-wallet, kartu kredit."
+            label="Payment Gateway Midtrans"
+            desc="Customer memilih VA, QRIS, e-wallet, atau kartu di halaman Midtrans."
             checked={data.payment_pg_enabled}
             onChange={(v) => patch("payment_pg_enabled", v)}
           />

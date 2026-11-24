@@ -176,7 +176,7 @@ export function KebijakanPrivasi() {
         </Sec>
 
         <Sec title="3. Data yang Kami Bagikan">
-          <p>Kami hanya membagikan data ke pihak ketiga yang perlu untuk memproses pesananmu — payment gateway (DOKU) untuk transaksi, ekspedisi (Biteship) untuk pengiriman. Kami tidak menjual data customer ke pihak lain.</p>
+          <p>Kami hanya membagikan data ke pihak ketiga yang perlu untuk memproses pesananmu — payment gateway (Midtrans) untuk transaksi, ekspedisi (Biteship) untuk pengiriman. Kami tidak menjual data customer ke pihak lain.</p>
         </Sec>
 
         <Sec title="4. Cookies & Analytics">

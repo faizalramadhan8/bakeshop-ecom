@@ -825,50 +825,13 @@ export interface CheckoutResponse {
   shipping_cost: number;
   total: number;
   voucher_discount?: number;
-  // PG DOKU (28 Jul 2026). URL yang customer buka untuk lakukan pembayaran
+  // URL halaman Midtrans yang customer buka untuk membayar
   // — VA number/QR code/e-wallet redirect page ditentukan channel.
   payment_url?: string;
   payment_channel?: string;
   payment_mode: "pg" | "manual";
   ecom_status: string;
 }
-
-// PG channels — direct fetch dari alifworks PG (public, no auth). BE tidak
-// jadi proxy karena channels rarely change + no security concern (list bank
-// public info). Response grouped by category dari upstream.
-export type PGChannelCategory = "virtual-account" | "qris" | "e-wallet" | "credit-card";
-
-export interface PGChannel {
-  id: number;
-  payment_name: string;      // "BCA Virtual Account"
-  payment_code: string;      // "bca" — yang di-submit ke BE saat checkout
-  payment_description: string;
-  payment_logo: string;
-  admin_fee: number;
-  total_admin_fee: number;
-  category: PGChannelCategory;
-  min_amount: number;
-}
-
-export interface PGChannelGroup {
-  category: PGChannelCategory;
-  channels: PGChannel[];
-}
-
-// PG_BASE_URL — override via VITE_PG_BASE_URL kalau nanti pindah ke prod.
-// Default ke sandbox URL yang dipakai sekarang.
-const PG_BASE_URL = import.meta.env.VITE_PG_BASE_URL || "https://api-pgsanbox.alifworks.net";
-
-export const pgChannelsApi = {
-  list: async (): Promise<PGChannelGroup[]> => {
-    const res = await fetch(`${PG_BASE_URL}/payment/api/v1/channels`);
-    if (!res.ok) throw new Error("Gagal ambil daftar metode pembayaran");
-    const json = await res.json();
-    // Envelope PG: {code, message, body: [...groups]}
-    if (json.code !== 0) throw new Error(json.message || "PG error");
-    return (json.body ?? []) as PGChannelGroup[];
-  },
-};
 
 export const checkoutApi = {
   getShippingRates: (addressId: string, opts?: { selected_item_ids?: string[]; buy_now_items?: { product_id: string; quantity: number }[] }) =>
@@ -894,8 +857,6 @@ export const checkoutApi = {
       voucher_code?: string;
     }[];
     notes?: string;
-    payment_channel?: string;            // bca/qris/ovo/dst
-    payment_channel_category?: string;   // audit: virtual-account/qris/e-wallet/credit-card
     selected_item_ids?: string[];
     buy_now_items?: { product_id: string; quantity: number }[];
   }) => request<CheckoutResponse>("POST", "/ecom/checkout/create-order", data, "customer"),
@@ -976,7 +937,7 @@ export interface CustomerOrderDetail {
   };
   payment: {
     mode: "pg" | "manual";
-    // PG DOKU checkout link. Customer tap "Bayar Sekarang" → open payment_url
+    // Halaman Midtrans. Customer menekan "Bayar Sekarang" lalu dibuka payment_url
     // di new tab (VA number / QR code / e-wallet redirect page).
     payment_url?: string;
     channel?: string;                    // bca/qris/ovo/dst
